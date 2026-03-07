@@ -3,15 +3,21 @@ internal import Combine
 
 struct ContentView: View {
     @State private var now = Date()
-    private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    private let timer = Timer.publish(every: 0.05, on: .main, in: .common).autoconnect()
 
     @State private var tasks: [ClockTask] = [
-        ClockTask(title: "Matcha Tasting", startMinutes: 14*60, endMinutes: 15*60, color: Color(red: 0.85, green: 0.78, blue: 0.58)), // 2:00 PM - 3:00 PM
-        ClockTask(title: "Garden Walk", startMinutes: 16*60, endMinutes: 17*60 + 30, color: Color(red: 0.85, green: 0.78, blue: 0.58)) // 4:00 PM - 5:30 PM
+        ClockTask(title: "Matcha Tasting", startMinutes: 14*60, endMinutes: 15*60, color: Color(red: 0.85, green: 0.78, blue: 0.58)), // Gold
+        ClockTask(title: "Garden Walk", startMinutes: 16*60, endMinutes: 17*60 + 30, color: Color(red: 0.75, green: 0.55, blue: 0.45)) // Muted Terracotta
     ]
 
     private let bgColor = Color(red: 0.18, green: 0.23, blue: 0.18) // Muted Sage Green
     private let goldColor = Color(red: 0.85, green: 0.78, blue: 0.58)
+
+    enum Tab {
+        case clock, week, today, profile
+    }
+    @State private var selectedTab: Tab = .clock
+    @State private var showingAddTask = false
 
     var body: some View {
         ZStack {
@@ -27,9 +33,16 @@ struct ContentView: View {
 
                     HStack {
                         Spacer()
-                        Text("October 2023") // Using the date from image
+                        Text(currentMonthYear())
                             .font(.system(size: 14, weight: .light, design: .serif))
                             .foregroundStyle(.white.opacity(0.7))
+                        
+                        Button(action: { showingAddTask = true }) {
+                            Image(systemName: "plus")
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundStyle(goldColor)
+                        }
+                        .padding(.leading, 8)
                     }
                     .padding(.horizontal, 40)
                 }
@@ -37,30 +50,39 @@ struct ContentView: View {
 
                 Spacer()
 
-                // Clock
-                ClockView(now: now, tasks: tasks)
-                    .frame(width: 280, height: 280)
-
-                Spacer()
-
-                // Task List
-                VStack(alignment: .leading, spacing: 28) {
-                    TaskRow(time: "2:00 PM", title: "Matcha Tasting")
-                    TaskRow(time: "4:00 PM", title: "Garden Walk")
+                // Content Views
+                Group {
+                    if selectedTab == .clock {
+                        clockContentView()
+                    } else if selectedTab == .week {
+                        Text("Week View").font(.title).foregroundStyle(goldColor)
+                    } else if selectedTab == .today {
+                        Text("Today's Agenda").font(.title).foregroundStyle(goldColor)
+                    } else if selectedTab == .profile {
+                        Text("User Profile").font(.title).foregroundStyle(goldColor)
+                    }
                 }
-                .padding(.horizontal, 40)
-                
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
                 Spacer()
 
                 // Bottom Tab Bar
                 HStack {
-                    TabBarItem(icon: "clock.fill", text: "Clock", isSelected: true)
+                    TabBarButton(icon: "clock.fill", text: "Clock", isSelected: selectedTab == .clock) {
+                        selectedTab = .clock
+                    }
                     Spacer()
-                    TabBarItem(icon: "calendar", text: "Week", isSelected: false)
+                    TabBarButton(icon: "calendar", text: "Week", isSelected: selectedTab == .week) {
+                        selectedTab = .week
+                    }
                     Spacer()
-                    TabBarItem(icon: "calendar.day.timeline.left", text: "Today", isSelected: false)
+                    TabBarButton(icon: "calendar.day.timeline.left", text: "Today", isSelected: selectedTab == .today) {
+                        selectedTab = .today
+                    }
                     Spacer()
-                    TabBarItem(icon: "person.fill", text: "Profile", isSelected: false)
+                    TabBarButton(icon: "person.fill", text: "Profile", isSelected: selectedTab == .profile) {
+                        selectedTab = .profile
+                    }
                 }
                 .padding(.horizontal, 40)
                 .padding(.bottom, 20)
@@ -70,12 +92,142 @@ struct ContentView: View {
         .onReceive(timer) { date in
             now = date
         }
+        .sheet(isPresented: $showingAddTask) {
+            AddTaskView(tasks: $tasks)
+        }
+    }
+
+    @ViewBuilder
+    private func clockContentView() -> some View {
+        VStack(spacing: 0) {
+            Spacer()
+                .frame(height: 20)
+                
+            // Clock
+            ClockView(now: now, tasks: $tasks)
+                .frame(width: 280, height: 280)
+
+            Spacer()
+                .frame(height: 50)
+
+            // Task List
+            List {
+                ForEach(tasks) { task in
+                    TaskRow(time: formatTime(minutes: task.startMinutes), title: task.title, color: task.color)
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets(top: 14, leading: 40, bottom: 14, trailing: 40))
+                        .listRowSeparator(.hidden)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button(role: .destructive) {
+                                if let index = tasks.firstIndex(where: { $0.id == task.id }) {
+                                    withAnimation {
+                                        tasks.remove(at: index)
+                                    }
+                                }
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
+                }
+            }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            
+            Spacer()
+        }
+    }
+
+    private func currentMonthYear() -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM yyyy"
+        return formatter.string(from: now)
+    }
+
+    private func formatTime(minutes: Int) -> String {
+        let m = minutes % (24 * 60)
+        let h = m / 60
+        let min = m % 60
+        var comps = DateComponents()
+        comps.hour = h
+        comps.minute = min
+        let date = Calendar.current.date(from: comps) ?? Date()
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm a"
+        return formatter.string(from: date)
+    }
+}
+
+struct AddTaskView: View {
+    @Environment(\.dismiss) var dismiss
+    @Binding var tasks: [ClockTask]
+    
+    @State private var title = ""
+    @State private var startTime = Date()
+    @State private var endTime = Date().addingTimeInterval(3600)
+    
+    private let goldColor = Color(red: 0.85, green: 0.78, blue: 0.58)
+    
+    private let themeColors: [Color] = [
+        Color(red: 0.85, green: 0.78, blue: 0.58), // Gold
+        Color(red: 0.75, green: 0.55, blue: 0.45), // Muted Terracotta
+        Color(red: 0.45, green: 0.50, blue: 0.35), // Olive
+        Color(red: 0.80, green: 0.72, blue: 0.60), // Soft Sand
+        Color(red: 0.35, green: 0.42, blue: 0.35)  // Pale Mint
+    ]
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("Task Title", text: $title)
+                }
+                
+                Section {
+                    DatePicker("Start Time", selection: $startTime, displayedComponents: .hourAndMinute)
+                    DatePicker("End Time", selection: $endTime, displayedComponents: .hourAndMinute)
+                }
+            }
+            .navigationTitle("New Task")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                        .foregroundStyle(goldColor)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Add") {
+                        let cal = Calendar.current
+                        let sComps = cal.dateComponents([.hour, .minute], from: startTime)
+                        let eComps = cal.dateComponents([.hour, .minute], from: endTime)
+                        let sMin = (sComps.hour ?? 0) * 60 + (sComps.minute ?? 0)
+                        let eMin = (eComps.hour ?? 0) * 60 + (eComps.minute ?? 0)
+                        
+                        let nextColor = themeColors[tasks.count % themeColors.count]
+                        
+                        let newTask = ClockTask(
+                            title: title.isEmpty ? "New Task" : title,
+                            startMinutes: sMin,
+                            endMinutes: eMin,
+                            color: nextColor
+                        )
+                        tasks.append(newTask)
+                        tasks.sort { $0.startMinutes < $1.startMinutes }
+                        dismiss()
+                    }
+                    .foregroundStyle(goldColor)
+                    .fontWeight(.bold)
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
     }
 }
 
 struct TaskRow: View {
     var time: String
     var title: String
+    var color: Color
+    
     var body: some View {
         HStack(spacing: 16) {
             Text(time)
@@ -88,10 +240,10 @@ struct TaskRow: View {
                 .fill(.white.opacity(0.3))
                 .frame(width: 1, height: 16)
             
-            // Leaf icon
-            Image(systemName: "leaf")
+            // Colored Leaf icon
+            Image(systemName: "leaf.fill")
                 .font(.system(size: 14))
-                .foregroundStyle(.white.opacity(0.8))
+                .foregroundStyle(color)
             
             Text(title)
                 .font(.system(size: 16, weight: .regular))
@@ -102,20 +254,24 @@ struct TaskRow: View {
     }
 }
 
-struct TabBarItem: View {
+struct TabBarButton: View {
     var icon: String
     var text: String
     var isSelected: Bool
+    var action: () -> Void
     
     var body: some View {
-        VStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.system(size: 20))
-                .foregroundStyle(isSelected ? Color.white : Color.white.opacity(0.5))
-            Text(text)
-                .font(.system(size: 10))
-                .foregroundStyle(isSelected ? Color.white : Color.white.opacity(0.5))
+        Button(action: action) {
+            VStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 20))
+                    .foregroundStyle(isSelected ? Color.white : Color.white.opacity(0.5))
+                Text(text)
+                    .font(.system(size: 10))
+                    .foregroundStyle(isSelected ? Color.white : Color.white.opacity(0.5))
+            }
         }
+        .buttonStyle(.plain)
     }
 }
 
