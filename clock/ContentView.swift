@@ -165,7 +165,11 @@ struct AddTaskView: View {
     @State private var startTime = Date()
     @State private var endTime = Date().addingTimeInterval(3600)
     
+    private let bgColor = Color(red: 0.18, green: 0.23, blue: 0.18) // Muted Sage Green
+    private let fieldBgColor = Color(red: 0.15, green: 0.20, blue: 0.15)
     private let goldColor = Color(red: 0.85, green: 0.78, blue: 0.58)
+    private let shadowLight = Color(red: 0.22, green: 0.28, blue: 0.22)
+    private let shadowDark = Color(red: 0.12, green: 0.16, blue: 0.12)
     
     private let themeColors: [Color] = [
         Color(red: 0.85, green: 0.78, blue: 0.58), // Gold
@@ -177,49 +181,111 @@ struct AddTaskView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    TextField("Task Title", text: $title)
-                }
+            ZStack {
+                bgColor.ignoresSafeArea()
                 
-                Section {
-                    DatePicker("Start Time", selection: $startTime, displayedComponents: .hourAndMinute)
-                    DatePicker("End Time", selection: $endTime, displayedComponents: .hourAndMinute)
+                ScrollView {
+                    VStack(spacing: 32) {
+                        
+                        // Title Input
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("TASK NAME")
+                                .font(.system(size: 12, weight: .regular, design: .serif))
+                                .foregroundStyle(goldColor)
+                                .tracking(1)
+                            
+                            TextField("Enter title...", text: $title)
+                                .font(.system(size: 16, weight: .regular))
+                                .foregroundStyle(.white)
+                                .padding()
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(fieldBgColor)
+                                        .shadow(color: shadowDark, radius: 5, x: 4, y: 4)
+                                        .shadow(color: shadowLight, radius: 5, x: -4, y: -4)
+                                )
+                        }
+                        
+                        // Time Selection
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("SCHEDULE")
+                                .font(.system(size: 12, weight: .regular, design: .serif))
+                                .foregroundStyle(goldColor)
+                                .tracking(1)
+                            
+                            VStack(spacing: 0) {
+                                DatePicker("Start", selection: $startTime, displayedComponents: .hourAndMinute)
+                                    .padding()
+                                    .foregroundStyle(.white.opacity(0.9))
+                                
+                                Rectangle()
+                                    .fill(Color.white.opacity(0.1))
+                                    .frame(height: 1)
+                                    .padding(.horizontal)
+                                
+                                DatePicker("End", selection: $endTime, displayedComponents: .hourAndMinute)
+                                    .padding()
+                                    .foregroundStyle(.white.opacity(0.9))
+                            }
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(fieldBgColor)
+                                    .shadow(color: shadowDark, radius: 5, x: 4, y: 4)
+                                    .shadow(color: shadowLight, radius: 5, x: -4, y: -4)
+                            )
+                        }
+                        
+                        // Add Button
+                        Button(action: saveTask) {
+                            Text("Add to Agenda")
+                                .font(.system(size: 16, weight: .medium, design: .serif))
+                                .foregroundStyle(bgColor)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 16)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(goldColor)
+                                        .shadow(color: .black.opacity(0.3), radius: 5, x: 2, y: 4)
+                                )
+                        }
+                        .padding(.top, 16)
+                    }
+                    .padding(32)
                 }
             }
             .navigationTitle("New Task")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(bgColor, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("Close") { dismiss() }
+                        .font(.system(size: 16, design: .serif))
                         .foregroundStyle(goldColor)
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Add") {
-                        let cal = Calendar.current
-                        let sComps = cal.dateComponents([.hour, .minute], from: startTime)
-                        let eComps = cal.dateComponents([.hour, .minute], from: endTime)
-                        let sMin = (sComps.hour ?? 0) * 60 + (sComps.minute ?? 0)
-                        let eMin = (eComps.hour ?? 0) * 60 + (eComps.minute ?? 0)
-                        
-                        let nextColor = themeColors[tasks.count % themeColors.count]
-                        
-                        let newTask = ClockTask(
-                            title: title.isEmpty ? "New Task" : title,
-                            startMinutes: sMin,
-                            endMinutes: eMin,
-                            color: nextColor
-                        )
-                        tasks.append(newTask)
-                        tasks.sort { $0.startMinutes < $1.startMinutes }
-                        dismiss()
-                    }
-                    .foregroundStyle(goldColor)
-                    .fontWeight(.bold)
                 }
             }
         }
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(.dark) // Keeps picker popups dark
+    }
+    
+    private func saveTask() {
+        let cal = Calendar.current
+        let sComps = cal.dateComponents([.hour, .minute], from: startTime)
+        let eComps = cal.dateComponents([.hour, .minute], from: endTime)
+        let sMin = (sComps.hour ?? 0) * 60 + (sComps.minute ?? 0)
+        let eMin = (eComps.hour ?? 0) * 60 + (eComps.minute ?? 0)
+        
+        let nextColor = themeColors[tasks.count % themeColors.count]
+        
+        let newTask = ClockTask(
+            title: title.isEmpty ? "New Task" : title,
+            startMinutes: sMin,
+            endMinutes: eMin,
+            color: nextColor
+        )
+        tasks.append(newTask)
+        tasks.sort { $0.startMinutes < $1.startMinutes }
+        dismiss()
     }
 }
 

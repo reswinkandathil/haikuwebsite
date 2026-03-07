@@ -90,19 +90,26 @@ struct ClockView: View {
                         .allowsHitTesting(false)
                 }
 
-                // Clock Dots
+                // Clock Dots and Numbers
                 ForEach(0..<12, id: \.self) { i in
                     let angle = Angle.degrees(Double(i) * 30 - 90)
-                    let dotRadius: CGFloat = (i % 3 == 0) ? 2.5 : 1.5
                     let dotDistance = faceRadius - 20
                     
                     let x = cos(CGFloat(angle.radians)) * dotDistance
                     let y = sin(CGFloat(angle.radians)) * dotDistance
                     
-                    Circle()
-                        .fill(goldColor)
-                        .frame(width: dotRadius * 2, height: dotRadius * 2)
-                        .position(x: center.x + x, y: center.y + y)
+                    if i % 3 == 0 { // 12, 3, 6, 9
+                        let hourNumber = i == 0 ? 12 : i
+                        Text("\(hourNumber)")
+                            .font(.system(size: 14, weight: .light, design: .serif))
+                            .foregroundStyle(goldColor)
+                            .position(x: center.x + x, y: center.y + y)
+                    } else {
+                        Circle()
+                            .fill(goldColor.opacity(0.6))
+                            .frame(width: 3, height: 3)
+                            .position(x: center.x + x, y: center.y + y)
+                    }
                 }
                 .allowsHitTesting(false)
 
