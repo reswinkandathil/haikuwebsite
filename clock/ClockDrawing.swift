@@ -3,6 +3,7 @@ import SwiftUI
 struct ClockView: View {
     var now: Date
     @Binding var tasks: [ClockTask]
+    @Binding var isFlowState: Bool
 
     // Palette matching the Haiku image
     private let clockFaceColor = Color(red: 0.18, green: 0.23, blue: 0.18)
@@ -58,7 +59,7 @@ struct ClockView: View {
                 Color.clear
                     .contentShape(Rectangle())
                     .gesture(
-                        DragGesture(minimumDistance: 0)
+                        DragGesture(minimumDistance: 5)
                             .onChanged { value in
                                 if activeDrag == nil {
                                     handleDragStart(location: value.location, size: proxy.size)
@@ -68,6 +69,7 @@ struct ClockView: View {
                             .onEnded { _ in
                                 activeDrag = nil
                                 tasks.sort { $0.startMinutes < $1.startMinutes }
+                                UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
                             }
                     )
                 
@@ -119,19 +121,36 @@ struct ClockView: View {
                     let isActive = activeTask?.id == task.id && !isDragging
                     let isPast = task.endMinutes <= Int(currentMinute) && !isDragging
                     
-                    let opacity = task.isCompleted ? 0.2 : (isPast ? 0.3 : 1.0)
-                    let glowRadius: CGFloat = (isActive && pulseState) ? 8 : (isDragging ? 4 : 0)
-                    let glowColor = task.color.opacity((isActive && pulseState) ? 0.6 : (isDragging ? 0.8 : 0))
+                    let opacity: Double = task.isCompleted ? 0.2 : (isPast ? 0.3 : 1.0)
+                    let glowRadius: CGFloat = (isActive && (pulseState || isFlowState)) ? (isFlowState ? 16 : 8) : (isDragging ? 4 : 0)
+                    let glowColor = task.color.opacity((isActive && (pulseState || isFlowState)) ? (isFlowState ? 0.8 : 0.6) : (isDragging ? 0.8 : 0))
 
                     ForEach(Array(getFragments(for: task).enumerated()), id: \.offset) { index, frag in
                         let r = frag.isAM ? amRingRadius : pmRingRadius
-                        TaskArc(startMinutes: frag.startMinutes, endMinutes: frag.endMinutes)
-                            .stroke(frag.task.color.opacity(opacity), style: StrokeStyle(lineWidth: ringWidth, lineCap: .round))
-                            .frame(width: r * 2, height: r * 2)
-                            .shadow(color: glowColor, radius: glowRadius)
-                            .allowsHitTesting(false)
-                            .animation(.none, value: activeDrag?.taskId) // Disable animation on drag state change
-                            .animation(isDragging ? .none : .easeInOut(duration: 1.0), value: pulseState)
+
+                        ZStack {
+                            TaskArc(startMinutes: frag.startMinutes, endMinutes: frag.endMinutes)
+                                .stroke(task.color.opacity(opacity), style: StrokeStyle(lineWidth: ringWidth, lineCap: .round))
+                                .frame(width: r * 2, height: r * 2)
+                                .shadow(color: glowColor, radius: glowRadius)
+                                .allowsHitTesting(true)
+                                .animation(.none, value: activeDrag?.taskId)
+                                .animation(isDragging ? .none : .easeInOut(duration: 1.0), value: pulseState)
+
+                            // Emoji at midpoint of the arc
+                            if !isDragging && (frag.endMinutes - frag.startMinutes) > 15 {
+                                let midMinute = frag.startMinutes + (frag.endMinutes - frag.startMinutes) / 2
+                                let angle = Angle.degrees(midMinute * 0.5 - 90)
+                                let x = cos(CGFloat(angle.radians)) * r
+                                let y = sin(CGFloat(angle.radians)) * r
+
+                                Text(task.emoji)
+                                    .font(.system(size: 8)) // Very tiny to fit nicely inside the colored track
+                                    .position(x: center.x + x, y: center.y + y)
+                                    .allowsHitTesting(false)
+                                    .opacity(opacity)
+                            }
+                        }
                     }
                 }
 
@@ -158,14 +177,53 @@ struct ClockView: View {
                 }
                 .allowsHitTesting(false)
 
-                // Central Status Text
+                // Central Status Text & Flow State Toggle
                 if let active = activeTask {
                     let minsRemaining = active.endMinutes - Int(currentMinute)
-                    Text("\(minsRemaining) min left")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(active.color)
-                        .position(x: center.x, y: center.y + faceRadius - 40)
-                        .allowsHitTesting(false)
+                    
+                    Button(action: {
+                        withAnimation(.easeInOut(duration: 0.8)) {
+                            isFlowState.toggle()
+                        }
+                    }) {
+                        VStack(spacing: 4) {
+                            Text("\(minsRemaining) min left")
+                                .font(.system(size: isFlowState ? 16 : 12, weight: .bold))
+                                .foregroundStyle(active.color)
+                            
+                            if isFlowState {
+                                Text(active.title)
+                                    .font(.system(size: 12, weight: .medium, design: .serif))
+                                    .foregroundStyle(active.color.opacity(0.8))
+                                    .transition(.opacity)
+                                    
+                                if let url = active.url {
+                                    Link(destination: url) {
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "link")
+                                            Text("Join")
+                                        }
+                                        .font(.system(size: 10, weight: .bold))
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 6)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .fill(active.color.opacity(0.2))
+                                                .stroke(active.color.opacity(0.5), lineWidth: 1)
+                                        )
+                                        .foregroundStyle(active.color)
+                                    }
+                                    .padding(.top, 8)
+                                    .transition(.scale.combined(with: .opacity))
+                                }
+                            }
+                        }
+                        .padding(24) // Extra hit area to tap easily
+                        .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .position(x: center.x, y: center.y + faceRadius - (isFlowState ? 45 : 40))
+                    
                 } else {
                     Text(formatTime(now))
                         .font(.system(size: 12, weight: .light))
@@ -272,45 +330,50 @@ struct ClockView: View {
             return val
         }
         
+        var proposedStart = task.startMinutes
+        var proposedEnd = task.endMinutes
+        
         switch drag.mode {
         case .move:
             let rawStart = drag.initialStartMinutes + Int(totalDelta)
             let snappedStart = snap(rawStart)
             let duration = drag.initialEndMinutes - drag.initialStartMinutes
             
-            task.startMinutes = snappedStart
-            task.endMinutes = snappedStart + duration
+            proposedStart = snappedStart
+            proposedEnd = snappedStart + duration
             
             // Constrain to 24h
-            if task.startMinutes < 0 {
-                task.startMinutes = 0
-                task.endMinutes = duration
-            } else if task.endMinutes > 1440 {
-                task.endMinutes = 1440
-                task.startMinutes = 1440 - duration
+            if proposedStart < 0 {
+                proposedStart = 0
+                proposedEnd = duration
+            } else if proposedEnd > 1440 {
+                proposedEnd = 1440
+                proposedStart = 1440 - duration
             }
 
         case .resizeStart:
             let rawStart = drag.initialStartMinutes + Int(totalDelta)
-            task.startMinutes = snap(rawStart)
-            if task.startMinutes < 0 { task.startMinutes = 0 }
-            if task.startMinutes > task.endMinutes - 5 { task.startMinutes = task.endMinutes - 5 }
+            proposedStart = snap(rawStart)
+            if proposedStart < 0 { proposedStart = 0 }
+            if proposedStart > proposedEnd - 5 { proposedStart = proposedEnd - 5 }
         case .resizeEnd, .create:
             let rawEnd = drag.initialEndMinutes + Int(totalDelta)
-            task.endMinutes = snap(rawEnd)
-            if task.endMinutes > 1440 { task.endMinutes = 1440 }
-            if task.endMinutes < task.startMinutes + 5 { task.endMinutes = task.startMinutes + 5 }
+            proposedEnd = snap(rawEnd)
+            if proposedEnd > 1440 { proposedEnd = 1440 }
+            if proposedEnd < proposedStart + 5 { proposedEnd = proposedStart + 5 }
         }
         
         // Haptic feedback when snapping to a new 30 or 60 min boundary
-        let startChangedToSnap = task.startMinutes != oldStart && task.startMinutes % 30 == 0
-        let endChangedToSnap = task.endMinutes != oldEnd && task.endMinutes % 30 == 0
+        let startChangedToSnap = proposedStart != oldStart && proposedStart % 30 == 0
+        let endChangedToSnap = proposedEnd != oldEnd && proposedEnd % 30 == 0
         
         if startChangedToSnap || endChangedToSnap {
-            let isHour = (task.startMinutes % 60 == 0) || (task.endMinutes % 60 == 0)
+            let isHour = (proposedStart % 60 == 0) || (proposedEnd % 60 == 0)
             UIImpactFeedbackGenerator(style: isHour ? .medium : .soft).impactOccurred()
         }
         
+        task.startMinutes = proposedStart
+        task.endMinutes = proposedEnd
         tasks[index] = task
     }
 
@@ -475,3 +538,4 @@ func getFragments(for task: ClockTask) -> [TaskFragment] {
     }
     return frags
 }
+

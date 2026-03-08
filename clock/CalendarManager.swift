@@ -51,11 +51,25 @@ class CalendarManager: ObservableObject {
             
             let color = themeColors[index % themeColors.count]
             
+            // Try to extract a URL from the event's URL property or notes
+            var meetingUrl: URL? = event.url
+            if meetingUrl == nil, let notes = event.notes {
+                let types: NSTextCheckingResult.CheckingType = .link
+                do {
+                    let detector = try NSDataDetector(types: types.rawValue)
+                    let matches = detector.matches(in: notes, options: [], range: NSRange(location: 0, length: notes.utf16.count))
+                    if let match = matches.first, let matchUrl = match.url {
+                        meetingUrl = matchUrl
+                    }
+                } catch {}
+            }
+            
             return ClockTask(
                 title: event.title ?? "Event",
                 startMinutes: sMin,
                 endMinutes: eMin,
-                color: color
+                color: color,
+                url: meetingUrl
             )
         }.sorted { $0.startMinutes < $1.startMinutes }
     }
