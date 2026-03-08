@@ -5,11 +5,11 @@ struct ClockView: View {
     @Binding var tasks: [ClockTask]
 
     // Palette matching the Haiku image
-    private let clockFaceColor = Color(red: 0.18, green: 0.23, blue: 0.18) // matches background but with neumorphic effect
-    private let shadowLight = Color(red: 0.22, green: 0.28, blue: 0.22) // lighter green for top-left shadow
-    private let shadowDark = Color(red: 0.12, green: 0.16, blue: 0.12)  // darker green for bottom-right shadow
+    private let clockFaceColor = Color(red: 0.18, green: 0.23, blue: 0.18)
+    private let shadowLight = Color(red: 0.22, green: 0.28, blue: 0.22)
+    private let shadowDark = Color(red: 0.12, green: 0.16, blue: 0.12)
     private let goldColor = Color(red: 0.85, green: 0.78, blue: 0.58)
-    private let taskTrackColor = Color(red: 0.15, green: 0.20, blue: 0.15) // subtle track
+    private let taskTrackColor = Color(red: 0.15, green: 0.20, blue: 0.15)
     
     // For task creation coloring
     private let themeColors: [Color] = [
@@ -21,6 +21,7 @@ struct ClockView: View {
     ]
     
     @State private var activeDrag: DragInfo?
+    @State private var pulseState: Bool = false
 
     struct DragInfo {
         var taskId: UUID
@@ -30,6 +31,18 @@ struct ClockView: View {
         enum Mode {
             case move, resizeStart, resizeEnd, create
         }
+    }
+
+    // Helper to get current minutes from midnight
+    private var currentMinute: Double {
+        let comps = Calendar.current.dateComponents([.hour, .minute, .second], from: now)
+        return Double((comps.hour ?? 0) * 60 + (comps.minute ?? 0)) + Double(comps.second ?? 0) / 60.0
+    }
+    
+    private var activeTask: ClockTask? {
+        // Return first task that is currently happening
+        let min = Int(currentMinute)
+        return tasks.first { !($0.isCompleted) && min >= $0.startMinutes && min < $0.endMinutes }
     }
 
     var body: some View {
@@ -53,17 +66,18 @@ struct ClockView: View {
                             .onEnded { _ in
                                 activeDrag = nil
                                 tasks.sort { $0.startMinutes < $1.startMinutes }
+                                UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
                             }
                     )
                 
-                // Task Track (outermost rim)
-                let ringWidth: CGFloat = 16 // Slightly thicker for easier tapping
-                let ringRadius = radius - (ringWidth/2)
+                // Task Tracks (Concentric AM/PM Rings)
+                let ringWidth: CGFloat = 12
+                let pmRingRadius = radius - (ringWidth/2)
+                let amRingRadius = pmRingRadius - ringWidth - 4
                 
-                // Neumorphic Base (slightly indented from the task ring)
-                let faceRadius = radius - ringWidth - 4
+                // Neumorphic Base
+                let faceRadius = amRingRadius - (ringWidth/2) - 4
                 
-                // The clock base doesn't block touches because it is behind Color.clear
                 Circle()
                     .fill(clockFaceColor)
                     .frame(width: faceRadius * 2, height: faceRadius * 2)
@@ -74,20 +88,50 @@ struct ClockView: View {
                     )
                     .allowsHitTesting(false)
                 
-                // Empty Task Track
+                // Empty AM Track (Inner)
+                Circle()
+                    .stroke(taskTrackColor.opacity(0.7), lineWidth: ringWidth)
+                    .frame(width: amRingRadius * 2, height: amRingRadius * 2)
+                    .allowsHitTesting(false)
+                
+                // Empty PM Track (Outer)
                 Circle()
                     .stroke(taskTrackColor, lineWidth: ringWidth)
-                    .frame(width: ringRadius * 2, height: ringRadius * 2)
+                    .frame(width: pmRingRadius * 2, height: pmRingRadius * 2)
+                    .allowsHitTesting(false)
+
+                // Track Indicators
+                Text("AM")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(goldColor.opacity(0.3))
+                    .position(x: center.x, y: center.y - amRingRadius)
+                    .allowsHitTesting(false)
+                Text("PM")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(goldColor.opacity(0.3))
+                    .position(x: center.x, y: center.y - pmRingRadius)
                     .allowsHitTesting(false)
                 
                 // Scheduled Tasks
                 ForEach(tasks) { task in
-                    TaskArc(startMinutes: task.start12h, endMinutes: task.end12h)
-                        .stroke(task.color.opacity(task.isCompleted ? 0.3 : 1.0), style: StrokeStyle(lineWidth: ringWidth, lineCap: .round))
-                        .frame(width: ringRadius * 2, height: ringRadius * 2)
-                        // Add glow if currently being dragged
-                        .shadow(color: activeDrag?.taskId == task.id ? task.color.opacity(0.8) : .clear, radius: 4)
-                        .allowsHitTesting(false)
+                    let isDragging = activeDrag?.taskId == task.id
+                    let isActive = activeTask?.id == task.id && !isDragging
+                    let isPast = task.endMinutes <= Int(currentMinute) && !isDragging
+                    
+                    let opacity = task.isCompleted ? 0.2 : (isPast ? 0.3 : 1.0)
+                    let glowRadius: CGFloat = (isActive && pulseState) ? 8 : (isDragging ? 4 : 0)
+                    let glowColor = task.color.opacity((isActive && pulseState) ? 0.6 : (isDragging ? 0.8 : 0))
+
+                    ForEach(Array(getFragments(for: task).enumerated()), id: \.offset) { index, frag in
+                        let r = frag.isAM ? amRingRadius : pmRingRadius
+                        TaskArc(startMinutes: frag.startMinutes, endMinutes: frag.endMinutes)
+                            .stroke(frag.task.color.opacity(opacity), style: StrokeStyle(lineWidth: ringWidth, lineCap: .round))
+                            .frame(width: r * 2, height: r * 2)
+                            .shadow(color: glowColor, radius: glowRadius)
+                            .allowsHitTesting(false)
+                            .animation(.none, value: activeDrag?.taskId) // Disable animation on drag state change
+                            .animation(isDragging ? .none : .easeInOut(duration: 1.0), value: pulseState)
+                    }
                 }
 
                 // Clock Dots and Numbers
@@ -113,12 +157,21 @@ struct ClockView: View {
                 }
                 .allowsHitTesting(false)
 
-                // Digital Time
-                Text(formatTime(now))
-                    .font(.system(size: 12, weight: .light))
-                    .foregroundStyle(.white.opacity(0.5))
-                    .position(x: center.x, y: center.y + faceRadius - 40)
-                    .allowsHitTesting(false)
+                // Central Status Text
+                if let active = activeTask {
+                    let minsRemaining = active.endMinutes - Int(currentMinute)
+                    Text("\(minsRemaining) min left")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(active.color)
+                        .position(x: center.x, y: center.y + faceRadius - 40)
+                        .allowsHitTesting(false)
+                } else {
+                    Text(formatTime(now))
+                        .font(.system(size: 12, weight: .light))
+                        .foregroundStyle(.white.opacity(0.5))
+                        .position(x: center.x, y: center.y + faceRadius - 40)
+                        .allowsHitTesting(false)
+                }
 
                 // Hands
                 let hourHandLength = faceRadius * 0.45
@@ -151,6 +204,11 @@ struct ClockView: View {
                     .allowsHitTesting(false)
             }
             .position(center)
+            .onAppear {
+                withAnimation(Animation.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
+                    pulseState = true
+                }
+            }
         }
     }
     
@@ -163,43 +221,33 @@ struct ClockView: View {
         let dist = sqrt(dx*dx + dy*dy)
         let radius = size.width / 2
         
-        let ringWidth: CGFloat = 16
-        let ringRadius = radius - (ringWidth/2)
+        let ringWidth: CGFloat = 12
+        let pmRingRadius = radius - (ringWidth/2)
+        let amRingRadius = pmRingRadius - ringWidth - 4
         
-        // Ensure user is tapping somewhere near the outer track
-        if abs(dist - ringRadius) > 30 { return }
+        let isAMClick = abs(dist - amRingRadius) < abs(dist - pmRingRadius)
         
-        let min = minute(from: location, in: size)
+        // Ensure user is tapping near one of the tracks
+        if abs(dist - (isAMClick ? amRingRadius : pmRingRadius)) > 30 { return }
+        
+        let min12h = minute(from: location, in: size)
+        let absoluteMinute = isAMClick ? min12h : min12h + 720
         
         // Find if we touched an existing task
         for task in tasks {
-            let s = task.start12h
-            let e = task.end12h
-            
-            let isInside: Bool
-            if e > s {
-                isInside = min >= s && min <= e
-            } else {
-                isInside = min >= s || min <= e // Handles 12 o'clock wraparound
-            }
-            
-            if isInside {
-                let distToStart = minDiff(min, s)
-                let distToEnd = minDiff(min, e)
+            if absoluteMinute >= Double(task.startMinutes) && absoluteMinute <= Double(task.endMinutes) {
+                let distToStart = abs(absoluteMinute - Double(task.startMinutes))
+                let distToEnd = abs(absoluteMinute - Double(task.endMinutes))
                 
                 var mode: DragInfo.Mode = .move
-                if distToStart <= 15 {
-                    mode = .resizeStart
-                } else if distToEnd <= 15 {
-                    mode = .resizeEnd
-                }
+                if distToStart <= 15 { mode = .resizeStart }
+                else if distToEnd <= 15 { mode = .resizeEnd }
                 
-                activeDrag = DragInfo(taskId: task.id, mode: mode, lastMouseMinute: min)
+                activeDrag = DragInfo(taskId: task.id, mode: mode, lastMouseMinute: min12h)
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                 return
             }
         }
-        
-        // Tapped empty space -> Do nothing, preventing new task creation via radial
     }
 
     private func handleDragChange(location: CGPoint, size: CGSize) {
@@ -215,23 +263,38 @@ struct ClockView: View {
         if abs(delta) < 1 { return } // Prevent tiny jitters
         
         var task = tasks[index]
+        let oldStart = task.startMinutes
+        let oldEnd = task.endMinutes
         
         switch drag.mode {
         case .move:
             task.startMinutes += Int(delta)
             task.endMinutes += Int(delta)
+            
+            // Constrain to 24h
+            if task.startMinutes < 0 {
+                let dur = task.endMinutes - task.startMinutes
+                task.startMinutes = 0
+                task.endMinutes = dur
+            } else if task.endMinutes > 1440 {
+                let dur = task.endMinutes - task.startMinutes
+                task.endMinutes = 1440
+                task.startMinutes = 1440 - dur
+            }
+
         case .resizeStart:
             task.startMinutes += Int(delta)
-            // Prevent dragging start past end
-            if task.startMinutes > task.endMinutes - 5 {
-                task.startMinutes = task.endMinutes - 5
-            }
+            if task.startMinutes < 0 { task.startMinutes = 0 }
+            if task.startMinutes > task.endMinutes - 5 { task.startMinutes = task.endMinutes - 5 }
         case .resizeEnd, .create:
             task.endMinutes += Int(delta)
-            // Prevent dragging end before start
-            if task.endMinutes < task.startMinutes + 5 {
-                task.endMinutes = task.startMinutes + 5
-            }
+            if task.endMinutes > 1440 { task.endMinutes = 1440 }
+            if task.endMinutes < task.startMinutes + 5 { task.endMinutes = task.startMinutes + 5 }
+        }
+        
+        // Haptic feedback every 15 minutes of dragging
+        if abs(task.startMinutes - oldStart) >= 15 || abs(task.endMinutes - oldEnd) >= 15 {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
         }
         
         tasks[index] = task
@@ -373,4 +436,30 @@ struct TaskArc: Shape {
 
         return p
     }
+}
+
+struct TaskFragment: Identifiable {
+    let id = UUID()
+    let isAM: Bool
+    let startMinutes: Double
+    let endMinutes: Double
+    let task: ClockTask
+}
+
+func getFragments(for task: ClockTask) -> [TaskFragment] {
+    var frags = [TaskFragment]()
+    let s = task.startMinutes
+    let e = task.endMinutes
+    
+    if s < 720 {
+        if e <= 720 {
+            frags.append(TaskFragment(isAM: true, startMinutes: Double(s), endMinutes: Double(e), task: task))
+        } else {
+            frags.append(TaskFragment(isAM: true, startMinutes: Double(s), endMinutes: 720.0, task: task))
+            frags.append(TaskFragment(isAM: false, startMinutes: 0.0, endMinutes: Double(min(e, 1440)) - 720.0, task: task))
+        }
+    } else {
+        frags.append(TaskFragment(isAM: false, startMinutes: Double(max(s, 720)) - 720.0, endMinutes: Double(min(e, 1440)) - 720.0, task: task))
+    }
+    return frags
 }

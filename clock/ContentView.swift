@@ -6,6 +6,7 @@ struct ContentView: View {
     private let timer = Timer.publish(every: 0.05, on: .main, in: .common).autoconnect()
 
     @State private var selectedDate = Calendar.current.startOfDay(for: Date())
+    @StateObject private var calendarManager = CalendarManager()
     
     @State private var tasksByDate: [Date: [ClockTask]] = {
         let today = Calendar.current.startOfDay(for: Date())
@@ -130,6 +131,36 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showingAddTask) {
             AddTaskView(tasks: currentTasksBinding)
+        }
+        .onAppear {
+            syncCalendar(for: selectedDate)
+        }
+        .onChange(of: selectedDate) { newDate in
+            syncCalendar(for: newDate)
+        }
+    }
+
+    private func syncCalendar(for date: Date) {
+        calendarManager.requestAccess { granted in
+            if granted {
+                let fetched = calendarManager.fetchEvents(for: date)
+                if !fetched.isEmpty {
+                    // Merge fetched events with local ones, or just replace them for demo purposes.
+                    // Let's replace for a cleaner demo, or append if not already there.
+                    // For simplicity, we just assign the fetched ones if there are any.
+                    DispatchQueue.main.async {
+                        // Merge logic: avoid wiping custom tasks, just add new ones from calendar.
+                        var current = tasksByDate[date, default: []]
+                        for fetchedTask in fetched {
+                            if !current.contains(where: { $0.title == fetchedTask.title && $0.startMinutes == fetchedTask.startMinutes }) {
+                                current.append(fetchedTask)
+                            }
+                        }
+                        current.sort { $0.startMinutes < $1.startMinutes }
+                        tasksByDate[date] = current
+                    }
+                }
+            }
         }
     }
 
