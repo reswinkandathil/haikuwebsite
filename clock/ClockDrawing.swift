@@ -322,22 +322,36 @@ struct ClockView: View {
         
         let isAMClick = is24HourClock ? false : abs(dist - amRingRadius) < abs(dist - pmRingRadius)
         
-        // Ensure user is tapping near one of the tracks
         let targetRadius = is24HourClock ? pmRingRadius : (isAMClick ? amRingRadius : pmRingRadius)
         if abs(dist - targetRadius) > 30 { return }
         
         let min12h = minute(from: location, in: size)
         let absoluteMinute = is24HourClock ? (min12h * 2) : (isAMClick ? min12h : min12h + 720)
         
-        // Find if we touched an existing task
         for task in tasks {
-            if absoluteMinute >= Double(task.startMinutes) && absoluteMinute <= Double(task.endMinutes) {
-                let distToStart = abs(absoluteMinute - Double(task.startMinutes))
-                let distToEnd = abs(absoluteMinute - Double(task.endMinutes))
+            if task.isCompleted { continue }
+            
+            let touchBuffer: Double = 10.0
+            let absMinWrap = absoluteMinute + 1440
+            
+            // Check if touch is within task bounds (handling midnight wrap)
+            let duration = Double(task.endMinutes - task.startMinutes)
+            let inNormal = absoluteMinute >= (Double(task.startMinutes) - touchBuffer) && absoluteMinute <= (Double(task.endMinutes) + touchBuffer)
+            let inWrap = absMinWrap >= (Double(task.startMinutes) - touchBuffer) && absMinWrap <= (Double(task.endMinutes) + touchBuffer)
+            
+            if inNormal || inWrap {
+                let effAbsolute = inWrap && !inNormal ? absMinWrap : absoluteMinute
+                let distToStart = abs(effAbsolute - Double(task.startMinutes))
+                let distToEnd = abs(effAbsolute - Double(task.endMinutes))
                 
                 var mode: DragInfo.Mode = .move
-                if distToStart <= 15 { mode = .resizeStart }
-                else if distToEnd <= 15 { mode = .resizeEnd }
+                if duration <= 15 {
+                    if distToStart <= 5 && distToStart < distToEnd { mode = .resizeStart }
+                    else if distToEnd <= 5 { mode = .resizeEnd }
+                } else {
+                    if distToStart <= 15 { mode = .resizeStart }
+                    else if distToEnd <= 15 { mode = .resizeEnd }
+                }
                 
                 activeDrag = DragInfo(taskId: task.id, mode: mode, initialMouseMinute: min12h, lastMouseMinute: min12h, accumulatedDelta: 0, initialStartMinutes: task.startMinutes, initialEndMinutes: task.endMinutes)
                 return
@@ -346,28 +360,36 @@ struct ClockView: View {
     }
 
     private func handleDragChange(location: CGPoint, size: CGSize) {
-        guard let drag = activeDrag, let index = tasks.firstIndex(where: { $0.id == drag.taskId }) else { return }
+        guard var drag = activeDrag, let index = tasks.firstIndex(where: { $0.id == drag.taskId }) else { return }
         
-        let currentMin = minute(from: location, in: size)
-        var totalDelta = currentMin - drag.initialMouseMinute
+        // Calculate the raw minute based solely on angle (0...720)
+        let min12h = minute(from: location, in: size)
         
-        // Handle wrap-around the dial
-        if totalDelta > 360 { totalDelta -= 720 }
-        else if totalDelta < -360 { totalDelta += 720 }
+        // Calculate angular delta based on min12h to prevent jumps when crossing rings radially
+        var delta = min12h - drag.lastMouseMinute
         
+        // Handle angular wrap-around
+        if delta > 360 { delta -= 720 }
+        else if delta < -360 { delta += 720 }
+        
+        drag.accumulatedDelta += delta
+        drag.lastMouseMinute = min12h
+        activeDrag = drag // Update state
+        
+        var totalDelta = drag.accumulatedDelta
         if is24HourClock {
-            totalDelta *= 2 // Because 360 degrees = 1440 minutes
+            totalDelta *= 2 // 360 degrees = 1440 minutes for 24h clock
         }
         
         var task = tasks[index]
         let oldStart = task.startMinutes
         let oldEnd = task.endMinutes
         
-        // Aim assist: snaps to nearest 30 mins if within 8 minutes
+        // Smoother Aim Assist: snap to nearest 15 mins if within 4 minutes
         func snap(_ val: Int) -> Int {
-            let remainder = val % 30
-            if remainder < 8 { return val - remainder }
-            if remainder > 22 { return val + (30 - remainder) }
+            let remainder = val % 15
+            if remainder < 4 { return val - remainder }
+            if remainder > 11 { return val + (15 - remainder) }
             return val
         }
         
@@ -383,34 +405,45 @@ struct ClockView: View {
             proposedStart = snappedStart
             proposedEnd = snappedStart + duration
             
-            // Constrain to 24h
+            // Wrap around 24h allowing tasks to span midnight smoothly
             if proposedStart < 0 {
-                proposedStart = 0
-                proposedEnd = duration
-            } else if proposedEnd > 1440 {
-                proposedEnd = 1440
-                proposedStart = 1440 - duration
+                proposedStart += 1440
+                proposedEnd += 1440
+            } else if proposedStart >= 1440 {
+                proposedStart -= 1440
+                proposedEnd -= 1440
             }
 
         case .resizeStart:
             let rawStart = drag.initialStartMinutes + Int(totalDelta)
             proposedStart = snap(rawStart)
-            if proposedStart < 0 { proposedStart = 0 }
-            if proposedStart > proposedEnd - 5 { proposedStart = proposedEnd - 5 }
+            
+            if proposedStart < 0 { proposedStart += 1440 }
+            if proposedStart >= 1440 { proposedStart -= 1440 }
+            
+            // Prevent inverted resize (start going past end)
+            var dist = proposedEnd - proposedStart
+            if dist < 0 { dist += 1440 }
+            if dist < 5 { proposedStart = proposedEnd - 5 }
+            
         case .resizeEnd, .create:
             let rawEnd = drag.initialEndMinutes + Int(totalDelta)
             proposedEnd = snap(rawEnd)
-            if proposedEnd > 1440 { proposedEnd = 1440 }
-            if proposedEnd < proposedStart + 5 { proposedEnd = proposedStart + 5 }
+            
+            if proposedEnd < 0 { proposedEnd += 1440 }
+            if proposedEnd >= 2880 { proposedEnd -= 1440 } // Keep it within 2 days span for safety
+            
+            var dist = proposedEnd - proposedStart
+            if dist < 0 { dist += 1440 }
+            if dist < 5 { proposedEnd = proposedStart + 5 }
         }
         
-        // Haptic feedback when snapping to a new 30 or 60 min boundary
-        let startChangedToSnap = proposedStart != oldStart && proposedStart % 30 == 0
-        let endChangedToSnap = proposedEnd != oldEnd && proposedEnd % 30 == 0
+        // Haptic feedback when snapping to a new boundary
+        let startChangedToSnap = proposedStart != oldStart && proposedStart % 15 == 0
+        let endChangedToSnap = proposedEnd != oldEnd && proposedEnd % 15 == 0
         
         if startChangedToSnap || endChangedToSnap {
-            let isHour = (proposedStart % 60 == 0) || (proposedEnd % 60 == 0)
-            UIImpactFeedbackGenerator(style: isHour ? .medium : .soft).impactOccurred()
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
         }
         
         task.startMinutes = proposedStart
@@ -580,11 +613,27 @@ func getFragments(for task: ClockTask) -> [TaskFragment] {
             frags.append(TaskFragment(isAM: true, startMinutes: Double(s), endMinutes: Double(e), task: task))
         } else {
             frags.append(TaskFragment(isAM: true, startMinutes: Double(s), endMinutes: 720.0, task: task))
-            frags.append(TaskFragment(isAM: false, startMinutes: 0.0, endMinutes: Double(min(e, 1440)) - 720.0, task: task))
+            let eInPM = min(e, 1440)
+            frags.append(TaskFragment(isAM: false, startMinutes: 0.0, endMinutes: Double(eInPM) - 720.0, task: task))
+            if e > 1440 {
+                let wrappedE = min(e - 1440, 720)
+                frags.append(TaskFragment(isAM: true, startMinutes: 0.0, endMinutes: Double(wrappedE), task: task))
+                if e > 2160 {
+                    frags.append(TaskFragment(isAM: false, startMinutes: 0.0, endMinutes: Double(e - 2160), task: task))
+                }
+            }
         }
     } else {
-        frags.append(TaskFragment(isAM: false, startMinutes: Double(max(s, 720)) - 720.0, endMinutes: Double(min(e, 1440)) - 720.0, task: task))
+        let sInPM = max(s, 720)
+        let eInPM = min(e, 1440)
+        frags.append(TaskFragment(isAM: false, startMinutes: Double(sInPM) - 720.0, endMinutes: Double(eInPM) - 720.0, task: task))
+        if e > 1440 {
+            let wrappedE = min(e - 1440, 720)
+            frags.append(TaskFragment(isAM: true, startMinutes: 0.0, endMinutes: Double(wrappedE), task: task))
+            if e > 2160 {
+                frags.append(TaskFragment(isAM: false, startMinutes: 0.0, endMinutes: Double(e - 2160), task: task))
+            }
+        }
     }
     return frags
 }
-
