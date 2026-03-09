@@ -49,7 +49,7 @@ struct ContentView: View {
             VStack(spacing: 0) {
                 // Header
                 VStack(spacing: 8) {
-                    Text("HAIKU")
+                    Text("ATTENT")
                         .font(.system(size: 26, weight: .regular, design: .serif))
                         .foregroundStyle(goldColor)
                         .tracking(2)
@@ -102,7 +102,7 @@ struct ContentView: View {
                             .id(selectedDate) // Animate view transition when date changes
                             .transition(.asymmetric(insertion: .opacity, removal: .opacity))
                     } else if selectedTab == .todo {
-                        TodoView(tasks: currentTasksBinding)
+                        TodoView()
                     } else if selectedTab == .analytics {
                         ProfileAnalyticsView(tasksByDate: tasksByDate)
                     } else if selectedTab == .profile {
@@ -728,58 +728,68 @@ struct ProfileSettingsView: View {
 
 
 struct TodoView: View {
-    @Binding var tasks: [ClockTask]
+    @StateObject private var brainDumpManager = BrainDumpManager()
+    @State private var newTaskTitle: String = ""
+    @FocusState private var isFocused: Bool
     
     private let bgColor = Color(red: 0.18, green: 0.23, blue: 0.18) // Muted Sage Green
     private let goldColor = Color(red: 0.85, green: 0.78, blue: 0.58)
 
-    // Helper for formatting time
-    @AppStorage("is24HourClock") private var is24HourClock = false
-    private func formatTime(minutes: Int) -> String {
-        let m = minutes % (24 * 60)
-        let h = m / 60
-        let min = m % 60
-        var comps = DateComponents()
-        comps.hour = h
-        comps.minute = min
-        let date = Calendar.current.date(from: comps) ?? Date()
-        let formatter = DateFormatter()
-        formatter.dateFormat = is24HourClock ? "HH:mm" : "h:mm a"
-        return formatter.string(from: date)
-    }
-
     var body: some View {
         VStack(spacing: 20) {
-            Text("TO-DO")
+            Text("BRAIN DUMP")
                 .font(.system(size: 14, weight: .regular, design: .serif))
                 .foregroundStyle(goldColor)
                 .tracking(2)
                 .padding(.top, 40)
             
-            if tasks.isEmpty {
+            // Quick Add Input
+            HStack {
+                TextField("Quick task...", text: $newTaskTitle)
+                    .font(.system(size: 16, weight: .regular))
+                    .foregroundStyle(.white)
+                    .tint(goldColor)
+                    .focused($isFocused)
+                    .submitLabel(.done)
+                    .onSubmit {
+                        addTask()
+                    }
+                
+                Button(action: addTask) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 24))
+                        .foregroundStyle(newTaskTitle.isEmpty ? .white.opacity(0.3) : goldColor)
+                }
+                .disabled(newTaskTitle.isEmpty)
+            }
+            .padding()
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color(red: 0.15, green: 0.20, blue: 0.15))
+            )
+            .padding(.horizontal, 40)
+            
+            if brainDumpManager.tasks.isEmpty {
                 Spacer()
                 VStack(spacing: 12) {
-                    Image(systemName: "list.bullet.clipboard")
+                    Image(systemName: "brain.head.profile")
                         .font(.system(size: 32))
                         .foregroundStyle(goldColor.opacity(0.5))
-                    Text("No tasks scheduled")
+                    Text("Clear your mind")
                         .font(.system(size: 14, weight: .light))
                         .foregroundStyle(.white.opacity(0.5))
                 }
                 Spacer()
             } else {
                 List {
-                    ForEach(tasks) { task in
-                        let timeString = "\(formatTime(minutes: task.startMinutes)) - \(formatTime(minutes: task.endMinutes))"
-                        TaskRow(
-                            time: timeString,
+                    ForEach(brainDumpManager.tasks) { task in
+                        BrainDumpRow(
                             title: task.title,
-                            color: task.color,
                             isCompleted: task.isCompleted,
                             onToggle: {
-                                if let index = tasks.firstIndex(where: { $0.id == task.id }) {
+                                if let index = brainDumpManager.tasks.firstIndex(where: { $0.id == task.id }) {
                                     withAnimation {
-                                        tasks[index].isCompleted.toggle()
+                                        brainDumpManager.tasks[index].isCompleted.toggle()
                                     }
                                     UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
                                 }
@@ -790,9 +800,9 @@ struct TodoView: View {
                         .listRowSeparator(.hidden)
                         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                             Button(role: .destructive) {
-                                if let index = tasks.firstIndex(where: { $0.id == task.id }) {
+                                if let index = brainDumpManager.tasks.firstIndex(where: { $0.id == task.id }) {
                                     withAnimation {
-                                        tasks.remove(at: index)
+                                        brainDumpManager.tasks.remove(at: index)
                                     }
                                 }
                             } label: {
@@ -804,6 +814,38 @@ struct TodoView: View {
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
             }
+        }
+    }
+    
+    private func addTask() {
+        guard !newTaskTitle.isEmpty else { return }
+        withAnimation {
+            brainDumpManager.tasks.insert(BrainDumpTask(title: newTaskTitle), at: 0)
+        }
+        newTaskTitle = ""
+        isFocused = true
+    }
+}
+
+struct BrainDumpRow: View {
+    var title: String
+    var isCompleted: Bool
+    var onToggle: () -> Void
+
+    var body: some View {
+        HStack(spacing: 16) {
+            Button(action: onToggle) {
+                Image(systemName: isCompleted ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 22, weight: .light))
+                    .foregroundStyle(isCompleted ? .white.opacity(0.3) : Color(red: 0.85, green: 0.78, blue: 0.58))
+            }
+
+            Text(title)
+                .font(.system(size: 16, weight: .regular))
+                .foregroundStyle(.white.opacity(isCompleted ? 0.4 : 0.9))
+                .strikethrough(isCompleted, color: .white.opacity(0.4))
+
+            Spacer()
         }
     }
 }

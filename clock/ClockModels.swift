@@ -106,3 +106,27 @@ enum AppTheme: String, CaseIterable, Identifiable {
         }
     }
 }
+
+struct BrainDumpTask: Identifiable, Codable {
+    var id = UUID()
+    var title: String
+    var isCompleted: Bool = false
+}
+
+class BrainDumpManager: ObservableObject {
+    @Published var tasks: [BrainDumpTask] = [] {
+        didSet {
+            if let data = try? JSONEncoder().encode(tasks) {
+                UserDefaults.standard.set(data, forKey: "brainDumpTasks")
+            }
+        }
+    }
+    
+    init() {
+        if let data = UserDefaults.standard.data(forKey: "brainDumpTasks"),
+           let decoded = try? JSONDecoder().decode([BrainDumpTask].self, from: data) {
+            self.tasks = decoded
+        }
+    }
+}
+
