@@ -630,87 +630,259 @@ struct TabBarButton: View {
 struct ProfileAnalyticsView: View {
     var tasksByDate: [Date: [ClockTask]]
     
+    @StateObject private var categoryManager = CategoryManager()
+    
     private let bgColor = Color(red: 0.18, green: 0.23, blue: 0.18) // Muted Sage Green
+    private let fieldBgColor = Color(red: 0.15, green: 0.20, blue: 0.15)
     private let goldColor = Color(red: 0.85, green: 0.78, blue: 0.58)
+    private let shadowLight = Color(red: 0.22, green: 0.28, blue: 0.22)
+    private let shadowDark = Color(red: 0.12, green: 0.16, blue: 0.12)
 
-    // Calculate time spent per color in minutes
-    private var colorBreakdown: [(Color, Double, String)] {
+    struct CategoryStats: Identifiable {
+        let id = UUID()
+        let name: String
+        let color: Color
+        let minutes: Double
+        let percentage: Double
+    }
+
+    private var stats: [CategoryStats] {
         var breakdown: [Color: Double] = [:]
         var totalMinutes: Double = 0
         
         for (_, tasks) in tasksByDate {
             for task in tasks {
-                // Approximate template matching by color
                 let duration = Double(task.endMinutes - task.startMinutes)
-                breakdown[task.color, default: 0] += duration
-                totalMinutes += duration
+                if duration > 0 {
+                    breakdown[task.color, default: 0] += duration
+                    totalMinutes += duration
+                }
             }
         }
         
         if totalMinutes == 0 { return [] }
         
-        let result = breakdown.map { (color, minutes) -> (Color, Double, String) in
+        let result = breakdown.map { (color, minutes) -> CategoryStats in
             let percentage = (minutes / totalMinutes) * 100
-            var name = "Custom"
-            if color == Color(red: 0.75, green: 0.55, blue: 0.45) { name = "Deep Work" }
-            else if color == Color(red: 0.85, green: 0.78, blue: 0.58) { name = "Meetings" }
-            else if color == Color(red: 0.35, green: 0.42, blue: 0.35) { name = "Break" }
-            else if color == Color(red: 0.45, green: 0.50, blue: 0.35) { name = "Creative" }
             
-            return (color, percentage, name)
+            // Try to find the category name from saved categories
+            var name = "Custom"
+            if let cat = categoryManager.categories.first(where: { $0.color == color }) {
+                name = cat.name
+            }
+            
+            return CategoryStats(name: name, color: color, minutes: minutes, percentage: percentage)
         }
         
-        return result.sorted { $0.1 > $1.1 } // Sort by largest percentage
+        return result.sorted { $0.minutes > $1.minutes }
     }
     
+    private var totalHours: Double {
+        stats.reduce(0) { $0 + $1.minutes } / 60.0
+    }
+    
+    private func formatDuration(_ minutes: Double) -> String {
+        let h = Int(minutes) / 60
+        let m = Int(minutes) % 60
+        if h > 0 {
+            return "\(h)h \(m)m"
+        }
+        return "\(m)m"
+    }
+
     var body: some View {
-        VStack(spacing: 40) {
-            Text("YOUR WEEK IN COLOR")
-                .font(.system(size: 14, weight: .regular, design: .serif))
-                .foregroundStyle(goldColor)
-                .tracking(2)
-            
-            let breakdown = colorBreakdown
-            if breakdown.isEmpty {
-                Text("No data to analyze yet.")
-                    .font(.system(size: 14, weight: .light))
-                    .foregroundStyle(.white.opacity(0.5))
-            } else {
-                // Color Bar
-                GeometryReader { proxy in
-                    HStack(spacing: 0) {
-                        ForEach(breakdown, id: \.2) { item in
-                            Rectangle()
-                                .fill(item.0)
-                                .frame(width: proxy.size.width * (item.1 / 100))
-                        }
-                    }
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .shadow(color: .black.opacity(0.4), radius: 5, x: 2, y: 4)
-                }
-                .frame(height: 30)
-                .padding(.horizontal, 40)
+        ScrollView {
+            VStack(spacing: 32) {
+                Text("INSIGHTS")
+                    .font(.system(size: 14, weight: .regular, design: .serif))
+                    .foregroundStyle(goldColor)
+                    .tracking(2)
+                    .padding(.top, 40)
                 
-                // Legend
-                VStack(spacing: 20) {
-                    ForEach(breakdown, id: \.2) { item in
-                        HStack {
-                            Circle()
-                                .fill(item.0)
-                                .frame(width: 12, height: 12)
-                            Text(item.2)
-                                .font(.system(size: 14, weight: .regular, design: .serif))
-                                .foregroundStyle(.white.opacity(0.9))
-                            Spacer()
-                            Text("\(String(format: "%.0f", item.1))%")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(item.0)
-                        }
-                        .padding(.horizontal, 60)
+                let currentStats = stats
+                if currentStats.isEmpty {
+                    VStack(spacing: 16) {
+                        Image(systemName: "chart.pie.fill")
+                            .font(.system(size: 48))
+                            .foregroundStyle(goldColor.opacity(0.3))
+                        Text("No data to analyze yet.")
+                            .font(.system(size: 14, weight: .light))
+                            .foregroundStyle(.white.opacity(0.5))
                     }
+                    .padding(.top, 100)
+                } else {
+                    // Top Stat Cards
+                    HStack(spacing: 16) {
+                        StatCard(title: "Total Time", value: String(format: "%.1fh", totalHours), icon: "clock.fill", color: goldColor)
+                        
+                        if let top = currentStats.first {
+                            StatCard(title: "Top Activity", value: top.name, icon: "trophy.fill", color: top.color)
+                        }
+                    }
+                    .padding(.horizontal, 32)
+                    
+                    // Donut Chart
+                    VStack(spacing: 24) {
+                        Text("Time Distribution")
+                            .font(.system(size: 12, weight: .medium, design: .serif))
+                            .foregroundStyle(.white.opacity(0.6))
+                            .tracking(1)
+                        
+                        ZStack {
+                            Circle()
+                                .stroke(fieldBgColor, lineWidth: 24)
+                                .shadow(color: shadowDark, radius: 5, x: 4, y: 4)
+                                .shadow(color: shadowLight, radius: 5, x: -4, y: -4)
+                            
+                            DonutChart(stats: currentStats)
+                            
+                            VStack {
+                                Text("\(currentStats.count)")
+                                    .font(.system(size: 36, weight: .light, design: .serif))
+                                    .foregroundStyle(goldColor)
+                                Text("Categories")
+                                    .font(.system(size: 12, weight: .light))
+                                    .foregroundStyle(.white.opacity(0.5))
+                            }
+                        }
+                        .frame(width: 200, height: 200)
+                    }
+                    .padding(.vertical, 16)
+                    
+                    // Detailed Breakdown
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("BREAKDOWN")
+                            .font(.system(size: 12, weight: .regular, design: .serif))
+                            .foregroundStyle(goldColor)
+                            .tracking(1)
+                            .padding(.horizontal, 4)
+                        
+                        VStack(spacing: 12) {
+                            ForEach(currentStats) { stat in
+                                HStack(spacing: 16) {
+                                    Circle()
+                                        .fill(stat.color)
+                                        .frame(width: 12, height: 12)
+                                        .shadow(color: stat.color.opacity(0.5), radius: 4)
+                                    
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(stat.name)
+                                            .font(.system(size: 16, weight: .medium))
+                                            .foregroundStyle(.white.opacity(0.9))
+                                        
+                                        // Progress Bar
+                                        GeometryReader { proxy in
+                                            ZStack(alignment: .leading) {
+                                                Capsule()
+                                                    .fill(fieldBgColor)
+                                                    .frame(height: 6)
+                                                
+                                                Capsule()
+                                                    .fill(stat.color)
+                                                    .frame(width: proxy.size.width * (stat.percentage / 100), height: 6)
+                                            }
+                                        }
+                                        .frame(height: 6)
+                                    }
+                                    
+                                    VStack(alignment: .trailing, spacing: 4) {
+                                        Text(formatDuration(stat.minutes))
+                                            .font(.system(size: 14, weight: .semibold))
+                                            .foregroundStyle(stat.color)
+                                        Text("\(String(format: "%.0f", stat.percentage))%")
+                                            .font(.system(size: 12, weight: .light))
+                                            .foregroundStyle(.white.opacity(0.5))
+                                    }
+                                }
+                                .padding()
+                                .background(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .fill(fieldBgColor)
+                                        .shadow(color: shadowDark, radius: 4, x: 2, y: 2)
+                                )
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 32)
+                    .padding(.bottom, 60)
                 }
             }
         }
+        .scrollIndicators(.hidden)
+    }
+}
+
+struct StatCard: View {
+    var title: String
+    var value: String
+    var icon: String
+    var color: Color
+    
+    private let fieldBgColor = Color(red: 0.15, green: 0.20, blue: 0.15)
+    private let shadowLight = Color(red: 0.22, green: 0.28, blue: 0.22)
+    private let shadowDark = Color(red: 0.12, green: 0.16, blue: 0.12)
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: icon)
+                    .font(.system(size: 16))
+                    .foregroundStyle(color)
+                Spacer()
+            }
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(value)
+                    .font(.system(size: 20, weight: .medium, design: .serif))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                
+                Text(title)
+                    .font(.system(size: 12, weight: .light))
+                    .foregroundStyle(.white.opacity(0.5))
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(fieldBgColor)
+                .shadow(color: shadowDark, radius: 5, x: 4, y: 4)
+                .shadow(color: shadowLight, radius: 5, x: -4, y: -4)
+        )
+    }
+}
+
+struct DonutChart: View {
+    var stats: [ProfileAnalyticsView.CategoryStats]
+    
+    var body: some View {
+        Canvas { context, size in
+            let center = CGPoint(x: size.width / 2, y: size.height / 2)
+            let radius = (min(size.width, size.height) / 2) - 12 // Account for stroke width
+            
+            var startAngle = Angle.degrees(-90)
+            
+            for stat in stats {
+                let angle = Angle.degrees((stat.percentage / 100) * 360)
+                let endAngle = startAngle + angle
+                
+                var path = Path()
+                path.addArc(center: center, radius: radius, startAngle: startAngle, endAngle: endAngle, clockwise: false)
+                
+                // Add a small gap between segments
+                context.stroke(
+                    path,
+                    with: .color(stat.color),
+                    style: StrokeStyle(lineWidth: 24, lineCap: .butt)
+                )
+                
+                // Advance start angle, adding 2 degrees for spacing
+                startAngle = endAngle + .degrees(2)
+            }
+        }
+        .rotationEffect(.degrees(0)) // Canvas animations can be tricky, keep it static for stability
     }
 }
 
