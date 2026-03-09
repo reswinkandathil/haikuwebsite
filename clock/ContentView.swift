@@ -37,7 +37,7 @@ struct ContentView: View {
     private var goldColor: Color { currentTheme.accent }
 
     enum Tab {
-        case clock, todo, analytics, profile
+        case clock, yearly, todo, analytics, profile
     }
     @State private var selectedTab: Tab = .clock
     @State private var showingAddTask = false
@@ -95,8 +95,11 @@ struct ContentView: View {
                     }
                 }
                 .padding(.top, 20)
-                .opacity(isFlowState ? 0 : 1)
+                .opacity(isFlowState || selectedTab == .yearly ? 0 : 1)
+                .frame(height: selectedTab == .yearly ? 0 : nil)
+                .clipped()
                 .animation(.easeInOut, value: isFlowState)
+                .animation(.easeInOut, value: selectedTab)
 
                 Spacer()
 
@@ -106,6 +109,8 @@ struct ContentView: View {
                         clockContentView()
                             .id(selectedDate) // Animate view transition when date changes
                             .transition(.asymmetric(insertion: .opacity, removal: .opacity))
+                    } else if selectedTab == .yearly {
+                        YearlyView(tasksByDate: tasksByDate, selectedDate: $selectedDate, selectedTab: $selectedTab)
                     } else if selectedTab == .todo {
                         TodoView()
                     } else if selectedTab == .analytics {
@@ -122,6 +127,10 @@ struct ContentView: View {
                 HStack {
                     TabBarButton(icon: "clock.fill", text: "Clock", isSelected: selectedTab == .clock) {
                         selectedTab = .clock
+                    }
+                    Spacer()
+                    TabBarButton(icon: "calendar", text: "Yearly", isSelected: selectedTab == .yearly) {
+                        selectedTab = .yearly
                     }
                     Spacer()
                     TabBarButton(icon: "list.bullet", text: "To-Do", isSelected: selectedTab == .todo) {

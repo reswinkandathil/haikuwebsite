@@ -5,6 +5,8 @@ struct StaticClockView: View {
     var tasks: [ClockTask]
     var is24HourClock: Bool = false
     var theme: AppTheme = .sage
+    var showHands: Bool = true
+    var showText: Bool = true
 
     // Themed Palette
     private var clockFaceColor: Color { theme.bg }
@@ -79,76 +81,82 @@ struct StaticClockView: View {
                 }
 
                 // Clock Dots and Numbers
-                let numDots = is24HourClock ? 24 : 12
-                ForEach(0..<numDots, id: \.self) { i in
-                    let angleDeg = is24HourClock ? (Double(i) * 15 - 90) : (Double(i) * 30 - 90)
-                    let angle = Angle.degrees(angleDeg)
-                    let dotDistance = faceRadius - (size * 0.06)
-                    
-                    let x = cos(CGFloat(angle.radians)) * dotDistance
-                    let y = sin(CGFloat(angle.radians)) * dotDistance
-                    
-                    if is24HourClock {
-                        if i % 6 == 0 {
-                            let hourNumber = i == 0 ? 24 : i
-                            Text("\(hourNumber)")
-                                .font(.system(size: size * 0.045, weight: .light, design: .serif))
-                                .foregroundStyle(goldColor)
-                                .position(x: center.x + x, y: center.y + y)
-                        } else if i % 2 == 0 {
-                            Circle()
-                                .fill(goldColor.opacity(0.6))
-                                .frame(width: 2, height: 2)
-                                .position(x: center.x + x, y: center.y + y)
-                        }
-                    } else {
-                        if i % 3 == 0 {
-                            let hourNumber = i == 0 ? 12 : i
-                            Text("\(hourNumber)")
-                                .font(.system(size: size * 0.045, weight: .light, design: .serif))
-                                .foregroundStyle(goldColor)
-                                .position(x: center.x + x, y: center.y + y)
+                if showText {
+                    let numDots = is24HourClock ? 24 : 12
+                    ForEach(0..<numDots, id: \.self) { i in
+                        let angleDeg = is24HourClock ? (Double(i) * 15 - 90) : (Double(i) * 30 - 90)
+                        let angle = Angle.degrees(angleDeg)
+                        let dotDistance = faceRadius - (size * 0.06)
+                        
+                        let x = cos(CGFloat(angle.radians)) * dotDistance
+                        let y = sin(CGFloat(angle.radians)) * dotDistance
+                        
+                        if is24HourClock {
+                            if i % 6 == 0 {
+                                let hourNumber = i == 0 ? 24 : i
+                                Text("\(hourNumber)")
+                                    .font(.system(size: size * 0.045, weight: .light, design: .serif))
+                                    .foregroundStyle(goldColor)
+                                    .position(x: center.x + x, y: center.y + y)
+                            } else if i % 2 == 0 {
+                                Circle()
+                                    .fill(goldColor.opacity(0.6))
+                                    .frame(width: 2, height: 2)
+                                    .position(x: center.x + x, y: center.y + y)
+                            }
                         } else {
-                            Circle()
-                                .fill(goldColor.opacity(0.6))
-                                .frame(width: 2, height: 2)
-                                .position(x: center.x + x, y: center.y + y)
+                            if i % 3 == 0 {
+                                let hourNumber = i == 0 ? 12 : i
+                                Text("\(hourNumber)")
+                                    .font(.system(size: size * 0.045, weight: .light, design: .serif))
+                                    .foregroundStyle(goldColor)
+                                    .position(x: center.x + x, y: center.y + y)
+                            } else {
+                                Circle()
+                                    .fill(goldColor.opacity(0.6))
+                                    .frame(width: 2, height: 2)
+                                    .position(x: center.x + x, y: center.y + y)
+                            }
                         }
                     }
                 }
 
                 // Central Status Text
-                if let active = activeTask {
-                    let minsRemaining = active.endMinutes - Int(currentMinute)
-                    VStack(spacing: 2) {
-                        Text("\(minsRemaining)m")
-                            .font(.system(size: size * 0.04, weight: .bold))
-                            .foregroundStyle(active.color)
-                    }
-                    .position(x: center.x, y: center.y + faceRadius - (size * 0.12))
-                } else {
-                    Text(formatTime(now))
-                        .font(.system(size: size * 0.04, weight: .light))
-                        .foregroundStyle(textForeground.opacity(0.5))
+                if showText {
+                    if let active = activeTask {
+                        let minsRemaining = active.endMinutes - Int(currentMinute)
+                        VStack(spacing: 2) {
+                            Text("\(minsRemaining)m")
+                                .font(.system(size: size * 0.04, weight: .bold))
+                                .foregroundStyle(active.color)
+                        }
                         .position(x: center.x, y: center.y + faceRadius - (size * 0.12))
+                    } else {
+                        Text(formatTime(now))
+                            .font(.system(size: size * 0.04, weight: .light))
+                            .foregroundStyle(textForeground.opacity(0.5))
+                            .position(x: center.x, y: center.y + faceRadius - (size * 0.12))
+                    }
                 }
 
                 // Hands
-                let hourHandLength = faceRadius * 0.45
-                let minuteHandLength = faceRadius * 0.75
+                if showHands {
+                    let hourHandLength = faceRadius * 0.45
+                    let minuteHandLength = faceRadius * 0.75
 
-                TimeHand(now: now, is24HourClock: is24HourClock)
-                    .stroke(goldColor, style: StrokeStyle(lineWidth: 3, lineCap: .round))
-                    .frame(width: hourHandLength * 2, height: hourHandLength * 2)
+                    TimeHand(now: now, is24HourClock: is24HourClock)
+                        .stroke(goldColor, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                        .frame(width: hourHandLength * 2, height: hourHandLength * 2)
 
-                MinuteHand(now: now)
-                    .stroke(goldColor, style: StrokeStyle(lineWidth: 2, lineCap: .round))
-                    .frame(width: minuteHandLength * 2, height: minuteHandLength * 2)
+                    MinuteHand(now: now)
+                        .stroke(goldColor, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                        .frame(width: minuteHandLength * 2, height: minuteHandLength * 2)
 
-                // Center dot
-                Circle()
-                    .fill(goldColor)
-                    .frame(width: 4, height: 4)
+                    // Center dot
+                    Circle()
+                        .fill(goldColor)
+                        .frame(width: 4, height: 4)
+                }
             }
             .position(center)
         }
