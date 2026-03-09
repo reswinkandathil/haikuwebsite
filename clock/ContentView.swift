@@ -41,6 +41,7 @@ struct ContentView: View {
     }
     @State private var selectedTab: Tab = .clock
     @State private var showingAddTask = false
+    @State private var showingDatePicker = false
     @AppStorage("is24HourClock") private var is24HourClock = false
 
     var body: some View {
@@ -64,12 +65,14 @@ struct ContentView: View {
                                     .foregroundStyle(goldColor.opacity(0.8))
                             }
                             
-                            Text(formattedSelectedDate())
-                                .font(.system(size: 14, weight: .medium, design: .serif))
-                                .foregroundStyle(currentTheme.textForeground.opacity(0.9))
-                                .frame(minWidth: 100, alignment: .center)
-                                .id(selectedDate) // Forces animation on change
-                                .transition(.opacity)
+                            Button(action: { showingDatePicker = true }) {
+                                Text(formattedSelectedDate())
+                                    .font(.system(size: 14, weight: .medium, design: .serif))
+                                    .foregroundStyle(currentTheme.textForeground.opacity(0.9))
+                                    .frame(minWidth: 100, alignment: .center)
+                                    .id(selectedDate) // Forces animation on change
+                                    .transition(.opacity)
+                            }
                             
                             Button(action: { changeDate(by: 1) }) {
                                 Image(systemName: "chevron.right")
@@ -153,6 +156,52 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showingAddTask) {
             AddTaskView(tasks: currentTasksBinding)
+        }
+        .sheet(isPresented: $showingDatePicker) {
+            NavigationStack {
+                ZStack {
+                    currentTheme.bg.ignoresSafeArea()
+                    
+                    ScrollView {
+                        VStack {
+                            DatePicker("Select Date", selection: $selectedDate, displayedComponents: .date)
+                                .datePickerStyle(.graphical)
+                                .tint(currentTheme.accent)
+                                .colorMultiply(currentTheme == .sakura ? currentTheme.textForeground : .white)
+                                .padding(20)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 24)
+                                        .fill(currentTheme.fieldBg)
+                                        .shadow(color: currentTheme.shadowDark, radius: 10, x: 8, y: 8)
+                                        .shadow(color: currentTheme.shadowLight, radius: 10, x: -8, y: -8)
+                                )
+                                .padding(24)
+                                .padding(.top, 16)
+                        }
+                    }
+                }
+                .navigationTitle("")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbarBackground(currentTheme.bg, for: .navigationBar)
+                .toolbarBackground(.visible, for: .navigationBar)
+                .toolbar {
+                    ToolbarItem(placement: .principal) {
+                        Text("Select Date")
+                            .font(.system(size: 18, weight: .medium, design: .serif))
+                            .foregroundStyle(currentTheme.textForeground)
+                            .tracking(1)
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") {
+                            showingDatePicker = false
+                        }
+                        .font(.system(size: 16, weight: .bold, design: .serif))
+                        .foregroundStyle(currentTheme.accent)
+                    }
+                }
+            }
+            .presentationDetents([.height(520)])
+            .preferredColorScheme(.dark)
         }
         .onAppear {
             syncCalendar(for: selectedDate)
