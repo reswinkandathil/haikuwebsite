@@ -337,35 +337,25 @@ struct AddTaskView: View {
     @State private var startTime = Date()
     @State private var endTime = Date().addingTimeInterval(3600)
     
+    @StateObject private var categoryManager = CategoryManager()
+    @State private var selectedCategoryId: UUID? = nil
+    
+    @State private var showingNewCategory = false
+    @State private var newCategoryName = ""
+    
     private let bgColor = Color(red: 0.18, green: 0.23, blue: 0.18) // Muted Sage Green
     private let fieldBgColor = Color(red: 0.15, green: 0.20, blue: 0.15)
     private let goldColor = Color(red: 0.85, green: 0.78, blue: 0.58)
     private let shadowLight = Color(red: 0.22, green: 0.28, blue: 0.22)
     private let shadowDark = Color(red: 0.12, green: 0.16, blue: 0.12)
     
-    private let themeColors: [Color] = [
-        Color(red: 0.85, green: 0.78, blue: 0.58), // Gold
-        Color(red: 0.75, green: 0.55, blue: 0.45), // Muted Terracotta
-        Color(red: 0.45, green: 0.50, blue: 0.35), // Olive
-        Color(red: 0.80, green: 0.72, blue: 0.60), // Soft Sand
-        Color(red: 0.35, green: 0.42, blue: 0.35)  // Pale Mint
+    private let themeRGBs: [RGB] = [
+        RGB(r: 0.85, g: 0.78, b: 0.58), // Gold
+        RGB(r: 0.75, g: 0.55, b: 0.45), // Muted Terracotta
+        RGB(r: 0.45, g: 0.50, b: 0.35), // Olive
+        RGB(r: 0.80, g: 0.72, b: 0.60), // Soft Sand
+        RGB(r: 0.35, g: 0.42, b: 0.35)  // Pale Mint
     ]
-
-    struct Template {
-        var name: String
-        var icon: String
-        var duration: Int
-        var color: Color
-    }
-    
-    private let templates = [
-        Template(name: "Deep Work", icon: "brain.head.profile", duration: 90, color: Color(red: 0.75, green: 0.55, blue: 0.45)),
-        Template(name: "Meeting", icon: "person.2.fill", duration: 30, color: Color(red: 0.85, green: 0.78, blue: 0.58)),
-        Template(name: "Admin", icon: "tray.fill", duration: 60, color: Color(red: 0.80, green: 0.72, blue: 0.60)),
-        Template(name: "Break", icon: "cup.and.saucer.fill", duration: 15, color: Color(red: 0.35, green: 0.42, blue: 0.35))
-    ]
-    
-    @State private var selectedTemplate: String? = nil
 
     var body: some View {
         NavigationStack {
@@ -375,9 +365,9 @@ struct AddTaskView: View {
                 ScrollView {
                     VStack(spacing: 32) {
                         
-                        // Templates
+                        // Categories
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("TEMPLATES")
+                            Text("CATEGORIES")
                                 .font(.system(size: 12, weight: .regular, design: .serif))
                                 .foregroundStyle(goldColor)
                                 .tracking(1)
@@ -385,15 +375,15 @@ struct AddTaskView: View {
                             
                             ScrollView(.horizontal, showsIndicators: false) {
                                 HStack(spacing: 16) {
-                                    ForEach(templates, id: \.name) { tmpl in
+                                    ForEach(categoryManager.categories) { cat in
                                         Button(action: {
-                                            applyTemplate(tmpl)
+                                            selectedCategoryId = cat.id
                                         }) {
                                             VStack(spacing: 12) {
-                                                Image(systemName: tmpl.icon)
+                                                Image(systemName: cat.icon)
                                                     .font(.system(size: 24))
-                                                    .foregroundStyle(tmpl.color)
-                                                Text(tmpl.name)
+                                                    .foregroundStyle(cat.color)
+                                                Text(cat.name)
                                                     .font(.system(size: 12, weight: .medium))
                                                     .foregroundStyle(.white.opacity(0.8))
                                             }
@@ -403,7 +393,7 @@ struct AddTaskView: View {
                                                     .fill(fieldBgColor)
                                                     .overlay(
                                                         RoundedRectangle(cornerRadius: 16)
-                                                            .stroke(selectedTemplate == tmpl.name ? tmpl.color : Color.clear, lineWidth: 2)
+                                                            .stroke(selectedCategoryId == cat.id ? cat.color : Color.clear, lineWidth: 2)
                                                     )
                                                     .shadow(color: shadowDark, radius: 5, x: 4, y: 4)
                                                     .shadow(color: shadowLight, radius: 5, x: -4, y: -4)
@@ -411,6 +401,28 @@ struct AddTaskView: View {
                                         }
                                         .buttonStyle(.plain)
                                     }
+                                    
+                                    // Add new category button
+                                    Button(action: {
+                                        showingNewCategory = true
+                                    }) {
+                                        VStack(spacing: 12) {
+                                            Image(systemName: "plus")
+                                                .font(.system(size: 24))
+                                                .foregroundStyle(goldColor)
+                                            Text("New")
+                                                .font(.system(size: 12, weight: .medium))
+                                                .foregroundStyle(.white.opacity(0.8))
+                                        }
+                                        .frame(width: 100, height: 100)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 16)
+                                                .fill(fieldBgColor)
+                                                .shadow(color: shadowDark, radius: 5, x: 4, y: 4)
+                                                .shadow(color: shadowLight, radius: 5, x: -4, y: -4)
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
                                 }
                                 .padding(.horizontal, 4)
                                 .padding(.vertical, 8)
@@ -494,14 +506,20 @@ struct AddTaskView: View {
                         .foregroundStyle(goldColor)
                 }
             }
+            .alert("New Category", isPresented: $showingNewCategory) {
+                TextField("Category Name", text: $newCategoryName)
+                Button("Cancel", role: .cancel) { newCategoryName = "" }
+                Button("Save") {
+                    guard !newCategoryName.isEmpty else { return }
+                    let rgb = themeRGBs[categoryManager.categories.count % themeRGBs.count]
+                    let newCat = Category(name: newCategoryName, icon: "folder.fill", rgb: rgb)
+                    categoryManager.categories.append(newCat)
+                    selectedCategoryId = newCat.id
+                    newCategoryName = ""
+                }
+            }
         }
-        .preferredColorScheme(.dark) // Keeps picker popups dark
-    }
-    
-    private func applyTemplate(_ tmpl: Template) {
-        selectedTemplate = tmpl.name
-        title = tmpl.name
-        endTime = startTime.addingTimeInterval(TimeInterval(tmpl.duration * 60))
+        .preferredColorScheme(.dark)
     }
     
     private func saveTask() {
@@ -512,10 +530,10 @@ struct AddTaskView: View {
         let eMin = (eComps.hour ?? 0) * 60 + (eComps.minute ?? 0)
         
         let colorToUse: Color
-        if let st = selectedTemplate, let tmpl = templates.first(where: { $0.name == st }) {
-            colorToUse = tmpl.color
+        if let id = selectedCategoryId, let cat = categoryManager.categories.first(where: { $0.id == id }) {
+            colorToUse = cat.color
         } else {
-            colorToUse = themeColors[tasks.count % themeColors.count]
+            colorToUse = themeRGBs[tasks.count % themeRGBs.count].color
         }
         
         let newTask = ClockTask(
@@ -636,7 +654,6 @@ struct ProfileAnalyticsView: View {
             var name = "Custom"
             if color == Color(red: 0.75, green: 0.55, blue: 0.45) { name = "Deep Work" }
             else if color == Color(red: 0.85, green: 0.78, blue: 0.58) { name = "Meetings" }
-            else if color == Color(red: 0.80, green: 0.72, blue: 0.60) { name = "Admin" }
             else if color == Color(red: 0.35, green: 0.42, blue: 0.35) { name = "Break" }
             else if color == Color(red: 0.45, green: 0.50, blue: 0.35) { name = "Creative" }
             
