@@ -615,11 +615,30 @@ struct AddTaskView: View {
                         .foregroundStyle(goldColor)
                 }
             }
+            .onAppear {
+                pickDistinctColor()
+            }
             .sheet(isPresented: $showingNewCategory) {
                 NewCategoryView(categoryManager: categoryManager, selectedCategoryId: $selectedCategoryId, theme: currentTheme)
             }
         }
         .preferredColorScheme(.dark)
+    }
+    
+    private func pickDistinctColor() {
+        // Get all currently used colors in the day
+        let usedColors = Set(tasks.map { $0.color })
+        
+        // Find indices of colors not yet used
+        let availableIndices = aestheticColors.indices.filter { idx in
+            !usedColors.contains(aestheticColors[idx].color)
+        }
+        
+        if !availableIndices.isEmpty {
+            selectedColorIndex = availableIndices.randomElement() ?? 0
+        } else {
+            selectedColorIndex = Int.random(in: 0..<aestheticColors.count)
+        }
     }
     
     private func saveTask() {
@@ -1240,7 +1259,7 @@ struct ProfileSettingsView: View {
                                             .shadow(color: currentTheme.shadowDark, radius: currentTheme == theme ? 4 : 1, x: 1, y: 1)
                                             .scaleEffect(currentTheme == theme ? 1.05 : 1.0)
                                             
-                                            Text(theme.name)
+                                                Text(theme.name)
                                                 .font(.system(size: 10, weight: currentTheme == theme ? .semibold : .regular, design: .serif))
                                                 .foregroundStyle(currentTheme.textForeground.opacity(currentTheme == theme ? 0.9 : 0.5))
                                         }

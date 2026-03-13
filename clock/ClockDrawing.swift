@@ -146,17 +146,6 @@ struct ClockView: View {
                                 .allowsHitTesting(true)
                                 .animation(.none, value: activeDrag?.taskId)
                                 .animation(isDragging ? .none : .easeInOut(duration: 1.0), value: pulseState)
-
-                            // Title at midpoint of the arc
-                            if !isDragging && (frag.endMinutes - frag.startMinutes) > 15 {
-                                let midMinute = frag.startMinutes + (frag.endMinutes - frag.startMinutes) / 2
-                                let angleDeg = is24HourClock ? (midMinute * 0.25 - 90) : (midMinute * 0.5 - 90)
-                                let angle = Angle.degrees(angleDeg)
-
-                                CurvedText(text: task.title, radius: r, midAngle: angle, center: center, textColor: textForeground)
-                                    .allowsHitTesting(false)
-                                    .opacity(opacity)
-                            }
                         }
                     }
                 }
@@ -626,61 +615,3 @@ func getFragments(for task: ClockTask) -> [TaskFragment] {
     return frags
 }
 
-struct CurvedText: View {
-    var text: String
-    var radius: CGFloat
-    var midAngle: Angle
-    var center: CGPoint
-    var textColor: Color = Color(red: 0.15, green: 0.15, blue: 0.15) // Default dark grey
-
-    var body: some View {
-        let chars = Array(text)
-
-        // Normalize angle to be between 0 and 2pi
-        let rawRadians = midAngle.radians.truncatingRemainder(dividingBy: 2 * Double.pi)
-        let normalizedRadians = rawRadians < 0 ? rawRadians + 2 * Double.pi : rawRadians
-
-        // If the text is on the bottom half of the clock (between 0 and pi), flip it
-        let isBottomHalf = normalizedRadians > 0 && normalizedRadians < Double.pi
-
-        // Calculate the individual widths of characters (to approximate font metrics)
-        let charWidths: [Double] = chars.map { char in
-            let str = String(char)
-            return ["i", "l", "t", "f", "I", "1", " ", ".", ",", ":", "'"].contains(str) ? 3.0 : 6.5
-        }
-
-        let totalWidth = charWidths.reduce(0, +)
-
-        return ZStack {
-            ForEach(0..<chars.count, id: \.self) { i in
-                let charStr = String(chars[i])
-
-                // Calculate position along the length of the text (0 to totalWidth)
-                let widthBefore = charWidths[0..<i].reduce(0, +)
-                let charMidpoint = widthBefore + (charWidths[i] / 2.0)
-
-                // Offset from the exact center of the text string
-                let linearOffset = charMidpoint - (totalWidth / 2.0)
-
-                // Convert linear offset to angular offset based on radius
-                let angleOffset = linearOffset / Double(radius)
-
-                // Flow right-to-left structurally on the bottom half so it reads left-to-right
-                let currentAngle = midAngle.radians + (isBottomHalf ? -angleOffset : angleOffset)
-
-                // Adjust rotation so letters stand upright
-                let rotationAdjustment = isBottomHalf ? -Double.pi / 2 : Double.pi / 2
-
-                Text(charStr)
-                    .font(.system(size: 32, weight: .semibold, design: .serif))
-                    .foregroundStyle(textColor)
-                    .scaleEffect(0.25)
-                    .rotationEffect(Angle(radians: currentAngle + rotationAdjustment))
-                    .position(
-                        x: center.x + radius * CGFloat(cos(currentAngle)),
-                        y: center.y + radius * CGFloat(sin(currentAngle))
-                    )
-            }
-        }
-    }
-}

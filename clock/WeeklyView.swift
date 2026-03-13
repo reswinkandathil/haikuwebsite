@@ -109,7 +109,7 @@ struct WeeklyView: View {
                                             .font(.system(size: 12, weight: .light))
                                             .foregroundStyle(currentTheme.textForeground.opacity(0.3))
                                     } else {
-                                        ForEach(tasks.prefix(3)) { task in
+                                        ForEach(tasks) { task in
                                             HStack(spacing: 6) {
                                                 Circle()
                                                     .fill(task.color)
@@ -119,11 +119,6 @@ struct WeeklyView: View {
                                                     .foregroundStyle(currentTheme.textForeground.opacity(0.8))
                                                     .lineLimit(1)
                                             }
-                                        }
-                                        if tasks.count > 3 {
-                                            Text("+ \(tasks.count - 3) more")
-                                                .font(.system(size: 10, weight: .light))
-                                                .foregroundStyle(currentTheme.textForeground.opacity(0.4))
                                         }
                                     }
                                 }
