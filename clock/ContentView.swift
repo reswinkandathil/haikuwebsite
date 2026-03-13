@@ -37,7 +37,7 @@ struct ContentView: View {
     private var goldColor: Color { currentTheme.accent }
 
     enum Tab {
-        case clock, yearly, todo, analytics, profile
+        case clock, weekly, todo, analytics, profile
     }
     @State private var selectedTab: Tab = .clock
     @State private var showingAddTask = false
@@ -95,8 +95,8 @@ struct ContentView: View {
                     }
                 }
                 .padding(.top, 20)
-                .opacity(isFlowState || selectedTab == .yearly ? 0 : 1)
-                .frame(height: selectedTab == .yearly ? 0 : nil)
+                .opacity(isFlowState || selectedTab == .weekly ? 0 : 1)
+                .frame(height: selectedTab == .weekly ? 0 : nil)
                 .clipped()
                 .animation(.easeInOut, value: isFlowState)
                 .animation(.easeInOut, value: selectedTab)
@@ -109,8 +109,8 @@ struct ContentView: View {
                         clockContentView()
                             .id(selectedDate) // Animate view transition when date changes
                             .transition(.asymmetric(insertion: .opacity, removal: .opacity))
-                    } else if selectedTab == .yearly {
-                        YearlyView(tasksByDate: tasksByDate, selectedDate: $selectedDate, selectedTab: $selectedTab)
+                    } else if selectedTab == .weekly {
+                        WeeklyView(tasksByDate: tasksByDate, selectedDate: $selectedDate, selectedTab: $selectedTab)
                     } else if selectedTab == .todo {
                         TodoView()
                     } else if selectedTab == .analytics {
@@ -129,8 +129,8 @@ struct ContentView: View {
                         selectedTab = .clock
                     }
                     Spacer()
-                    TabBarButton(icon: "calendar", text: "Monthly", isSelected: selectedTab == .yearly) {
-                        selectedTab = .yearly
+                    TabBarButton(icon: "calendar", text: "Weekly", isSelected: selectedTab == .weekly) {
+                        selectedTab = .weekly
                     }
                     Spacer()
                     TabBarButton(icon: "list.bullet", text: "To-Do", isSelected: selectedTab == .todo) {
