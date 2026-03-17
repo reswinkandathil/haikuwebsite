@@ -1,5 +1,6 @@
 import WidgetKit
 import SwiftUI
+import EventKit
 
 struct Provider: TimelineProvider {
     func placeholder(in context: Context) -> SimpleEntry {
@@ -49,21 +50,17 @@ struct clockWidgetEntryView : View {
     }
 
     var body: some View {
-        ZStack {
-            theme.bg.ignoresSafeArea()
-            
-            // Reusing your highly aesthetic clock!
-            StaticClockView(
-                now: entry.date,
-                tasks: fetchWidgetTasks(),
-                is24HourClock: false,
-                theme: theme,
-                showHands: true,
-                showText: true, // Show the numbers around the clock
-                showCenterText: false // Hide the digital time in the middle for the widget
-            )
-            .padding(12)
-        }
+        // Reusing your highly aesthetic clock!
+        StaticClockView(
+            now: entry.date,
+            tasks: fetchWidgetTasks(),
+            is24HourClock: false,
+            theme: theme,
+            showHands: true,
+            showText: true, // Show the numbers around the clock
+            showCenterText: false // Hide the digital time and focus time in the middle for the widget
+        )
+        .padding(12)
     }
     
     // Fetch today's tasks directly from EventKit so they show on the widget automatically
@@ -89,12 +86,11 @@ struct clockWidget: Widget {
             if #available(iOS 17.0, *) {
                 clockWidgetEntryView(entry: entry)
                     .containerBackground(for: .widget) {
-                        // The background color is handled in the View
-                        Color.clear
+                        AppTheme.sage.bg
                     }
             } else {
                 clockWidgetEntryView(entry: entry)
-                    .background(Color.clear)
+                    .background(AppTheme.sage.bg)
             }
         }
         .configurationDisplayName("Aesthetic Clock")

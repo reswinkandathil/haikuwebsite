@@ -7,6 +7,7 @@ struct StaticClockView: View {
     var theme: AppTheme = .sage
     var showHands: Bool = true
     var showText: Bool = true
+    var showCenterText: Bool = true
 
     // Themed Palette
     private var clockFaceColor: Color { theme.bg }
@@ -122,7 +123,7 @@ struct StaticClockView: View {
                 }
 
                 // Central Status Text
-                if showText {
+                if showCenterText {
                     if let active = activeTask {
                         let minsRemaining = active.endMinutes - Int(currentMinute)
                         VStack(spacing: 2) {

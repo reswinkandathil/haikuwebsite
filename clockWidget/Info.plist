@@ -7,9 +7,5 @@
 		<key>NSExtensionPointIdentifier</key>
 		<string>com.apple.widgetkit-extension</string>
 	</dict>
-	<key>NSCalendarsUsageDescription</key>
-	<string>The widget needs access to your calendar to display your scheduled events on the clock face.</string>
-	<key>NSCalendarsFullAccessUsageDescription</key>
-	<string>The widget needs access to your calendar to display your scheduled events on the clock face.</string>
 </dict>
 </plist>
