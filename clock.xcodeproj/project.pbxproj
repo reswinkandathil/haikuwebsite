@@ -41,6 +41,7 @@
 		48AA4D7F2F69E2280088657A /* clockWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = clockWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		48AA4D812F69E2280088657A /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		48AA4D832F69E2290088657A /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		48AA4E932F6B70C20088657A /* clockWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = clockWidgetExtension.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -52,16 +53,17 @@
 			target = 48AA4D7E2F69E2280088657A /* clockWidgetExtension */;
 		};
 		48AA4D9A2F69E2550088657A /* Exceptions for "clock" folder in "clockWidgetExtension" target */ = {
-		        isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-		        membershipExceptions = (
-		                CalendarManager.swift,
-		                ClockDrawing.swift,
-		                ClockModels.swift,
-		                ClockTask.swift,
-		                StaticClockView.swift,
-		        );
-		        target = 48AA4D7E2F69E2280088657A /* clockWidgetExtension */;
-		};/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				CalendarManager.swift,
+				ClockDrawing.swift,
+				ClockModels.swift,
+				ClockTask.swift,
+				StaticClockView.swift,
+			);
+			target = 48AA4D7E2F69E2280088657A /* clockWidgetExtension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		486924942F5CABE3000B0E65 /* clock */ = {
@@ -105,6 +107,7 @@
 		486924892F5CABE3000B0E65 = {
 			isa = PBXGroup;
 			children = (
+				48AA4E932F6B70C20088657A /* clockWidgetExtension.entitlements */,
 				486924942F5CABE3000B0E65 /* clock */,
 				48AA4D852F69E2290088657A /* clockWidget */,
 				48AA4D802F69E2280088657A /* Frameworks */,
@@ -386,6 +389,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = clock/clock.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = L8UXLKRL78;
@@ -420,6 +424,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = clock/clock.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = L8UXLKRL78;
@@ -454,6 +459,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = clockWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = L8UXLKRL78;
@@ -484,6 +490,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = clockWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = L8UXLKRL78;

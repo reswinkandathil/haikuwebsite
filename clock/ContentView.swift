@@ -1,5 +1,6 @@
 import SwiftUI
 internal import Combine
+import WidgetKit
 
 struct ContentView: View {
     @AppStorage("appTheme") private var currentTheme: AppTheme = .sage
@@ -17,6 +18,9 @@ struct ContentView: View {
     @State private var isFlowState = false
     
     @State private var tasksByDate: [Date: [ClockTask]] = {
+        if let saved = SharedTaskManager.shared.load() {
+            return saved
+        }
         let today = Calendar.current.startOfDay(for: Date())
         return [
             today: [
@@ -215,16 +219,28 @@ struct ContentView: View {
         }
         .onAppear {
             syncCalendar(for: selectedDate)
+            SharedTaskManager.shared.save(is24HourClock: is24HourClock)
+            SharedTaskManager.shared.save(theme: currentTheme)
             NotificationManager.shared.scheduleSpamNotifications(tasksByDate: tasksByDate, isEnabled: spamNotifications)
         }
         .onChange(of: selectedDate) { newDate in
             syncCalendar(for: newDate)
         }
         .onChange(of: tasksByDate) { _ in
+            SharedTaskManager.shared.save(tasksByDate: tasksByDate)
+            WidgetCenter.shared.reloadAllTimelines()
             NotificationManager.shared.scheduleSpamNotifications(tasksByDate: tasksByDate, isEnabled: spamNotifications)
         }
         .onChange(of: spamNotifications) { _ in
             NotificationManager.shared.scheduleSpamNotifications(tasksByDate: tasksByDate, isEnabled: spamNotifications)
+        }
+        .onChange(of: is24HourClock) { newValue in
+            SharedTaskManager.shared.save(is24HourClock: newValue)
+            WidgetCenter.shared.reloadAllTimelines()
+        }
+        .onChange(of: currentTheme) { newValue in
+            SharedTaskManager.shared.save(theme: newValue)
+            WidgetCenter.shared.reloadAllTimelines()
         }
     }
 

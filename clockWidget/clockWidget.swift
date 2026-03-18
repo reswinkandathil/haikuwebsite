@@ -44,9 +44,8 @@ struct SimpleEntry: TimelineEntry {
 struct clockWidgetEntryView : View {
     var entry: Provider.Entry
     
-    // Default to .sage for the widget
     var theme: AppTheme {
-        return .sage
+        return SharedTaskManager.shared.loadTheme()
     }
 
     var body: some View {
@@ -54,7 +53,7 @@ struct clockWidgetEntryView : View {
         StaticClockView(
             now: entry.date,
             tasks: fetchWidgetTasks(),
-            is24HourClock: false,
+            is24HourClock: fetchIs24HourClock(),
             theme: theme,
             showHands: true,
             showText: true, // Show the numbers around the clock
@@ -62,9 +61,18 @@ struct clockWidgetEntryView : View {
         )
         .padding(12)
     }
+
+    private func fetchIs24HourClock() -> Bool {
+        return SharedTaskManager.shared.loadIs24HourClock()
+    }
     
-    // Fetch today's tasks directly from EventKit so they show on the widget automatically
+    // Fetch today's tasks from the App Group, falling back to EventKit if not found
     private func fetchWidgetTasks() -> [ClockTask] {
+        let today = Calendar.current.startOfDay(for: Date())
+        if let savedTasks = SharedTaskManager.shared.load(), let todaysTasks = savedTasks[today] {
+            return todaysTasks
+        }
+        
         let manager = CalendarManager()
         // Check if we actually have permission. In widgets, we can't prompt, we just have to check.
         let status = EKEventStore.authorizationStatus(for: .event)
@@ -86,11 +94,11 @@ struct clockWidget: Widget {
             if #available(iOS 17.0, *) {
                 clockWidgetEntryView(entry: entry)
                     .containerBackground(for: .widget) {
-                        AppTheme.sage.bg
+                        SharedTaskManager.shared.loadTheme().bg
                     }
             } else {
                 clockWidgetEntryView(entry: entry)
-                    .background(AppTheme.sage.bg)
+                    .background(SharedTaskManager.shared.loadTheme().bg)
             }
         }
         .configurationDisplayName("Aesthetic Clock")
