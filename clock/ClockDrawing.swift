@@ -40,7 +40,7 @@ struct ClockView: View {
     private var activeTask: ClockTask? {
         // Return first task that is currently happening
         let min = Int(currentMinute)
-        return tasks.first { !($0.isCompleted) && min >= $0.startMinutes && min < $0.endMinutes }
+        return tasks.first { min >= $0.startMinutes && min < $0.endMinutes }
     }
 
     var body: some View {
@@ -130,7 +130,7 @@ struct ClockView: View {
                     let isActive = activeTask?.id == task.id && !isDragging
                     let isPast = task.endMinutes <= Int(currentMinute) && !isDragging
                     
-                    let opacity: Double = task.isCompleted ? 0.2 : (isPast ? 0.3 : 1.0)
+                    let opacity: Double = isPast ? 0.3 : 1.0
                     let glowRadius: CGFloat = (isActive && (pulseState || isFlowState)) ? (isFlowState ? 16 : 8) : (isDragging ? 4 : 0)
                     let glowColor = task.color.opacity((isActive && (pulseState || isFlowState)) ? (isFlowState ? 0.8 : 0.6) : (isDragging ? 0.8 : 0))
 
