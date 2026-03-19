@@ -13,11 +13,11 @@ class NotificationManager {
         }
     }
     
-    func scheduleSpamNotifications(tasksByDate: [Date: [ClockTask]], isEnabled: Bool) {
+    func scheduleEarlyNotifications(tasksByDate: [Date: [ClockTask]], offsets: [Int]) {
         let center = UNUserNotificationCenter.current()
         center.removeAllPendingNotificationRequests()
         
-        guard isEnabled else { return }
+        guard !offsets.isEmpty else { return }
         
         let calendar = Calendar.current
         let now = Date()
@@ -37,22 +37,23 @@ class NotificationManager {
                 
                 // Only schedule if the task is in the future
                 if startTime > now {
-                    // Schedule spam: 10 notifications exactly 1 minute before
-                    let notificationTime = startTime.addingTimeInterval(-60) // 1 minute before
-                    
-                    if notificationTime > now {
-                        for i in 1...10 {
+                    for offset in offsets {
+                        let notificationTime = startTime.addingTimeInterval(-TimeInterval(offset * 60))
+                        
+                        if notificationTime > now {
                             let content = UNMutableNotificationContent()
-                            content.title = "ALARM: Task Starting!"
-                            content.body = "Your task '\(task.title)' starts in 1 minute!"
+                            content.title = task.title
+                            if offset == 0 {
+                                content.body = "Starting now!"
+                            } else {
+                                content.body = "Starts in \(offset) minute\(offset == 1 ? "" : "s")"
+                            }
                             content.sound = .default
                             
-                            // Stagger by 1 second to ensure they trigger reliably
-                            let specificTime = notificationTime.addingTimeInterval(TimeInterval(i))
-                            let triggerDate = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second, .nanosecond], from: specificTime)
+                            let triggerDate = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: notificationTime)
                             let trigger = UNCalendarNotificationTrigger(dateMatching: triggerDate, repeats: false)
                             
-                            let request = UNNotificationRequest(identifier: "\(task.id.uuidString)-spam-\(i)", content: content, trigger: trigger)
+                            let request = UNNotificationRequest(identifier: "\(task.id.uuidString)-offset-\(offset)", content: content, trigger: trigger)
                             
                             center.add(request)
                         }

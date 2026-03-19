@@ -47,7 +47,12 @@ struct ContentView: View {
     @State private var showingAddTask = false
     @State private var showingDatePicker = false
     @AppStorage("is24HourClock") private var is24HourClock = false
-    @AppStorage("spamNotifications") private var spamNotifications = false
+    @AppStorage("notificationOffsetsData") private var notificationOffsetsData = ""
+
+    private var notificationOffsets: [Int] {
+        if notificationOffsetsData.isEmpty { return [] }
+        return notificationOffsetsData.split(separator: ",").compactMap { Int($0) }
+    }
 
     var body: some View {
         ZStack {
@@ -221,7 +226,7 @@ struct ContentView: View {
             syncCalendar(for: selectedDate)
             SharedTaskManager.shared.save(is24HourClock: is24HourClock)
             SharedTaskManager.shared.save(theme: currentTheme)
-            NotificationManager.shared.scheduleSpamNotifications(tasksByDate: tasksByDate, isEnabled: spamNotifications)
+            NotificationManager.shared.scheduleEarlyNotifications(tasksByDate: tasksByDate, offsets: notificationOffsets)
         }
         .onChange(of: selectedDate) { newDate in
             syncCalendar(for: newDate)
@@ -229,10 +234,10 @@ struct ContentView: View {
         .onChange(of: tasksByDate) { _ in
             SharedTaskManager.shared.save(tasksByDate: tasksByDate)
             WidgetCenter.shared.reloadAllTimelines()
-            NotificationManager.shared.scheduleSpamNotifications(tasksByDate: tasksByDate, isEnabled: spamNotifications)
+            NotificationManager.shared.scheduleEarlyNotifications(tasksByDate: tasksByDate, offsets: notificationOffsets)
         }
-        .onChange(of: spamNotifications) { _ in
-            NotificationManager.shared.scheduleSpamNotifications(tasksByDate: tasksByDate, isEnabled: spamNotifications)
+        .onChange(of: notificationOffsetsData) { _ in
+            NotificationManager.shared.scheduleEarlyNotifications(tasksByDate: tasksByDate, offsets: notificationOffsets)
         }
         .onChange(of: is24HourClock) { newValue in
             SharedTaskManager.shared.save(is24HourClock: newValue)
@@ -1197,11 +1202,30 @@ struct DonutChart: View {
 
 struct ProfileSettingsView: View {
     @AppStorage("appTheme") private var currentTheme: AppTheme = .sage
-    @AppStorage("spamNotifications") private var spamNotifications = false
+    @AppStorage("notificationOffsetsData") private var notificationOffsetsData = ""
     @Binding var is24HourClock: Bool
 
     private var bgColor: Color { currentTheme.bg }
     private var goldColor: Color { currentTheme.accent }
+
+    private var offsets: [Int] {
+        if notificationOffsetsData.isEmpty { return [] }
+        return notificationOffsetsData.split(separator: ",").compactMap { Int($0) }
+    }
+    
+    private func toggleOffset(_ offset: Int) {
+        var current = Set(offsets)
+        if current.contains(offset) {
+            current.remove(offset)
+        } else {
+            current.insert(offset)
+            NotificationManager.shared.requestAuthorization()
+        }
+        notificationOffsetsData = current.sorted().map(String.init).joined(separator: ",")
+    }
+
+    @State private var showingCustomOffsetAlert = false
+    @State private var customOffsetString = ""
 
     var body: some View {
         ScrollView {
@@ -1225,22 +1249,65 @@ struct ProfileSettingsView: View {
                                 .shadow(color: currentTheme.shadowLight, radius: 5, x: -4, y: -4)
                         )
 
-                    Toggle("Task Alarm Spam", isOn: $spamNotifications)
-                        .font(.system(size: 16, weight: .medium, design: .serif))
-                        .foregroundStyle(currentTheme.textForeground.opacity(0.9))
-                        .padding()
-                        .tint(goldColor)
-                        .onChange(of: spamNotifications) { newValue in
-                            if newValue {
-                                NotificationManager.shared.requestAuthorization()
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("NOTIFICATIONS")
+                            .font(.system(size: 12, weight: .regular, design: .serif))
+                            .foregroundStyle(goldColor)
+                            .tracking(1)
+                            .padding(.horizontal, 4)
+
+                        // Base options (5, 30) + Custom
+                        let baseOptions = [5, 30]
+                        let displayOptions = Array(Set(baseOptions + offsets)).sorted()
+                        
+                        VStack(spacing: 12) {
+                            ForEach(displayOptions, id: \.self) { offset in
+                                let isSelected = offsets.contains(offset)
+                                Button(action: { toggleOffset(offset) }) {
+                                    HStack {
+                                        Text(offset == 0 ? "At time of event" : "\(offset) minutes before")
+                                            .font(.system(size: 16, weight: .medium, design: .serif))
+                                            .foregroundStyle(currentTheme.textForeground.opacity(0.9))
+                                        Spacer()
+                                        if isSelected {
+                                            Image(systemName: "checkmark")
+                                                .foregroundStyle(goldColor)
+                                                .fontWeight(.bold)
+                                        }
+                                    }
+                                    .padding()
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(currentTheme.fieldBg)
+                                            .shadow(color: currentTheme.shadowDark, radius: isSelected ? 2 : 5, x: isSelected ? 2 : 4, y: isSelected ? 2 : 4)
+                                            .shadow(color: currentTheme.shadowLight, radius: isSelected ? 2 : 5, x: isSelected ? -2 : -4, y: isSelected ? -2 : -4)
+                                    )
+                                }
+                                .buttonStyle(.plain)
                             }
+                            
+                            // Custom Button
+                            Button(action: { showingCustomOffsetAlert = true }) {
+                                HStack {
+                                    Image(systemName: "plus")
+                                        .font(.system(size: 14, weight: .bold))
+                                        .foregroundStyle(goldColor)
+                                    Text("Add Custom Time")
+                                        .font(.system(size: 16, weight: .medium, design: .serif))
+                                        .foregroundStyle(currentTheme.textForeground.opacity(0.9))
+                                    Spacer()
+                                }
+                                .padding()
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(currentTheme.fieldBg)
+                                        .shadow(color: currentTheme.shadowDark, radius: 5, x: 4, y: 4)
+                                        .shadow(color: currentTheme.shadowLight, radius: 5, x: -4, y: -4)
+                                )
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(currentTheme.fieldBg)
-                                .shadow(color: currentTheme.shadowDark, radius: 5, x: 4, y: 4)
-                                .shadow(color: currentTheme.shadowLight, radius: 5, x: -4, y: -4)
-                        )
+                    }
                     VStack(alignment: .leading, spacing: 12) {
                         Text("THEME")
                             .font(.system(size: 12, weight: .regular, design: .serif))
@@ -1328,12 +1395,31 @@ struct ProfileSettingsView: View {
                                 .multilineTextAlignment(.center)
                                 .padding(.horizontal, 8)
                         }
-                    }
-                }
-                .padding(.horizontal, 40)
-            }
-        }
-    }}
+                        }
+                        }
+                        .padding(.horizontal, 40)
+                        }
+                        }
+                        .alert("Custom Notification", isPresented: $showingCustomOffsetAlert) {
+                        TextField("Minutes before event", text: $customOffsetString)
+                        .keyboardType(.numberPad)
+                        Button("Add", action: {
+                        if let customValue = Int(customOffsetString), customValue >= 0 {
+                        var current = Set(offsets)
+                        current.insert(customValue)
+                        notificationOffsetsData = current.sorted().map(String.init).joined(separator: ",")
+                        NotificationManager.shared.requestAuthorization()
+                        }
+                        customOffsetString = ""
+                        })
+                        Button("Cancel", role: .cancel) {
+                        customOffsetString = ""
+                        }
+                        } message: {
+                        Text("Enter how many minutes before the task you'd like to be notified.")
+                        }
+                        }
+                        }
 
 
 struct TodoView: View {
