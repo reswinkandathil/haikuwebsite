@@ -46,6 +46,8 @@ struct ContentView: View {
     @State private var selectedTab: Tab = .clock
     @State private var showingAddTask = false
     @State private var showingDatePicker = false
+    @State private var showingCustomOffsetAlert = false
+    @State private var customOffsetString = ""
     @AppStorage("is24HourClock") private var is24HourClock = false
     @AppStorage("notificationOffsetsData") private var notificationOffsetsData = ""
 
@@ -125,7 +127,7 @@ struct ContentView: View {
                     } else if selectedTab == .analytics {
                         ProfileAnalyticsView(tasksByDate: tasksByDate)
                     } else if selectedTab == .profile {
-                        ProfileSettingsView(is24HourClock: $is24HourClock)
+                        ProfileSettingsView(is24HourClock: $is24HourClock, showingCustomOffsetAlert: $showingCustomOffsetAlert)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -159,6 +161,105 @@ struct ContentView: View {
                 .foregroundStyle(currentTheme.textForeground.opacity(0.6))
                 .opacity(isFlowState ? 0 : 1)
                 .animation(.easeInOut, value: isFlowState)
+            }
+            .blur(radius: showingCustomOffsetAlert ? 4 : 0)
+            .disabled(showingCustomOffsetAlert)
+
+            if showingCustomOffsetAlert {
+                Color.black.opacity(0.15)
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        withAnimation {
+                            showingCustomOffsetAlert = false
+                            customOffsetString = ""
+                        }
+                    }
+                
+                VStack(spacing: 24) {
+                    VStack(spacing: 8) {
+                        Text("Custom Notification")
+                            .font(.system(size: 20, weight: .bold, design: .serif))
+                            .foregroundStyle(goldColor)
+                        
+                        Text("Enter how many minutes before the task you'd like to be notified.")
+                            .font(.system(size: 14, weight: .regular, design: .serif))
+                            .foregroundStyle(currentTheme.textForeground.opacity(0.7))
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal)
+                    }
+                    
+                    HStack {
+                        TextField("0", text: $customOffsetString)
+                            .keyboardType(.numberPad)
+                            .font(.system(size: 24, weight: .bold, design: .serif))
+                            .multilineTextAlignment(.center)
+                            .foregroundStyle(currentTheme.textForeground)
+                        
+                        Text("minutes")
+                            .font(.system(size: 16, weight: .medium, design: .serif))
+                            .foregroundStyle(currentTheme.textForeground.opacity(0.5))
+                    }
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 20)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(currentTheme.fieldBg)
+                            .shadow(color: currentTheme.shadowDark, radius: 4, x: 2, y: 2)
+                            .shadow(color: currentTheme.shadowLight, radius: 4, x: -2, y: -2)
+                    )
+                    
+                    HStack(spacing: 16) {
+                        Button(action: {
+                            withAnimation {
+                                showingCustomOffsetAlert = false
+                                customOffsetString = ""
+                            }
+                        }) {
+                            Text("Cancel")
+                                .font(.system(size: 16, weight: .medium, design: .serif))
+                                .foregroundStyle(currentTheme.textForeground.opacity(0.6))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                        }
+                        .buttonStyle(.plain)
+                        
+                        Button(action: {
+                            if let customValue = Int(customOffsetString), customValue >= 0 {
+                                var currentSet = Set(notificationOffsets)
+                                currentSet.insert(customValue)
+                                notificationOffsetsData = currentSet.sorted().map(String.init).joined(separator: ",")
+                                NotificationManager.shared.requestAuthorization()
+                            }
+                            withAnimation {
+                                showingCustomOffsetAlert = false
+                                customOffsetString = ""
+                            }
+                        }) {
+                            Text("Add")
+                                .font(.system(size: 16, weight: .bold, design: .serif))
+                                .foregroundStyle(currentTheme.bg)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(goldColor)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(32)
+                .background(
+                    RoundedRectangle(cornerRadius: 28)
+                        .fill(currentTheme.bg)
+                        .shadow(color: currentTheme.shadowDark.opacity(0.3), radius: 20, x: 10, y: 10)
+                        .shadow(color: currentTheme.shadowLight.opacity(0.3), radius: 20, x: -10, y: -10)
+                )
+                .padding(.horizontal, 40)
+                .transition(.asymmetric(
+                    insertion: .scale(scale: 0.9).combined(with: .opacity),
+                    removal: .scale(scale: 0.9).combined(with: .opacity)
+                ))
             }
         }
         .onReceive(timer) { date in
@@ -1204,6 +1305,7 @@ struct ProfileSettingsView: View {
     @AppStorage("appTheme") private var currentTheme: AppTheme = .sage
     @AppStorage("notificationOffsetsData") private var notificationOffsetsData = ""
     @Binding var is24HourClock: Bool
+    @Binding var showingCustomOffsetAlert: Bool
 
     private var bgColor: Color { currentTheme.bg }
     private var goldColor: Color { currentTheme.accent }
@@ -1223,9 +1325,6 @@ struct ProfileSettingsView: View {
         }
         notificationOffsetsData = current.sorted().map(String.init).joined(separator: ",")
     }
-
-    @State private var showingCustomOffsetAlert = false
-    @State private var customOffsetString = ""
 
     var body: some View {
         ScrollView {
@@ -1287,7 +1386,11 @@ struct ProfileSettingsView: View {
                             }
                             
                             // Custom Button
-                            Button(action: { showingCustomOffsetAlert = true }) {
+                            Button(action: { 
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    showingCustomOffsetAlert = true 
+                                }
+                            }) {
                                 HStack {
                                     Image(systemName: "plus")
                                         .font(.system(size: 14, weight: .bold))
@@ -1342,7 +1445,7 @@ struct ProfileSettingsView: View {
                                             .shadow(color: currentTheme.shadowDark, radius: currentTheme == theme ? 4 : 1, x: 1, y: 1)
                                             .scaleEffect(currentTheme == theme ? 1.05 : 1.0)
                                             
-                                                Text(theme.name)
+                                            Text(theme.name)
                                                 .font(.system(size: 10, weight: currentTheme == theme ? .semibold : .regular, design: .serif))
                                                 .foregroundStyle(currentTheme.textForeground.opacity(currentTheme == theme ? 0.9 : 0.5))
                                         }
@@ -1364,7 +1467,6 @@ struct ProfileSettingsView: View {
 
                         VStack(spacing: 8) {
                             Button(action: {
-                                // Attempt to jump directly to Calendar Settings via Apple's internal URL scheme
                                 if let url = URL(string: "App-Prefs:root=CALENDAR"), UIApplication.shared.canOpenURL(url) {
                                     UIApplication.shared.open(url)
                                 } else if let url = URL(string: UIApplication.openSettingsURLString) {
@@ -1395,31 +1497,14 @@ struct ProfileSettingsView: View {
                                 .multilineTextAlignment(.center)
                                 .padding(.horizontal, 8)
                         }
-                        }
-                        }
-                        .padding(.horizontal, 40)
-                        }
-                        }
-                        .alert("Custom Notification", isPresented: $showingCustomOffsetAlert) {
-                        TextField("Minutes before event", text: $customOffsetString)
-                        .keyboardType(.numberPad)
-                        Button("Add", action: {
-                        if let customValue = Int(customOffsetString), customValue >= 0 {
-                        var current = Set(offsets)
-                        current.insert(customValue)
-                        notificationOffsetsData = current.sorted().map(String.init).joined(separator: ",")
-                        NotificationManager.shared.requestAuthorization()
-                        }
-                        customOffsetString = ""
-                        })
-                        Button("Cancel", role: .cancel) {
-                        customOffsetString = ""
-                        }
-                        } message: {
-                        Text("Enter how many minutes before the task you'd like to be notified.")
-                        }
-                        }
-                        }
+                    }
+                }
+                .padding(.horizontal, 40)
+                .padding(.bottom, 40)
+            }
+        }
+    }
+}
 
 
 struct TodoView: View {
