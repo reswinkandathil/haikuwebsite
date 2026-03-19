@@ -48,6 +48,7 @@ struct ContentView: View {
     @State private var showingDatePicker = false
     @State private var showingCustomOffsetAlert = false
     @State private var customOffsetString = ""
+    @State private var prefilledTaskTitle: String? = nil
     @AppStorage("is24HourClock") private var is24HourClock = false
     @AppStorage("notificationOffsetsData") private var notificationOffsetsData = ""
 
@@ -86,7 +87,7 @@ struct ContentView: View {
                                     .transition(.opacity)
                             }
                             
-                            Button(action: { changeDate(by: 1) }) {
+                            Button(action: { showingDatePicker = true }) {
                                 Image(systemName: "chevron.right")
                                     .font(.system(size: 14, weight: .semibold))
                                     .foregroundStyle(goldColor.opacity(0.8))
@@ -96,7 +97,10 @@ struct ContentView: View {
                         // Right-aligned Plus Button
                         HStack {
                             Spacer()
-                            Button(action: { showingAddTask = true }) {
+                            Button(action: { 
+                                prefilledTaskTitle = nil
+                                showingAddTask = true 
+                            }) {
                                 Image(systemName: "plus")
                                     .font(.system(size: 20, weight: .bold))
                                     .foregroundStyle(goldColor)
@@ -123,7 +127,10 @@ struct ContentView: View {
                     } else if selectedTab == .weekly {
                         WeeklyView(tasksByDate: tasksByDate, selectedDate: $selectedDate, selectedTab: $selectedTab)
                     } else if selectedTab == .todo {
-                        TodoView()
+                        TodoView(onSchedule: { title in
+                            prefilledTaskTitle = title
+                            showingAddTask = true
+                        })
                     } else if selectedTab == .analytics {
                         ProfileAnalyticsView(tasksByDate: tasksByDate)
                     } else if selectedTab == .profile {
@@ -275,7 +282,7 @@ struct ContentView: View {
             }
         }
         .sheet(isPresented: $showingAddTask) {
-            AddTaskView(tasksByDate: $tasksByDate, selectedDate: $selectedDate)
+            AddTaskView(tasksByDate: $tasksByDate, selectedDate: $selectedDate, prefilledTitle: prefilledTaskTitle)
         }
         .sheet(isPresented: $showingDatePicker) {
             NavigationStack {
@@ -524,6 +531,8 @@ struct AddTaskView: View {
     @Binding var tasksByDate: [Date: [ClockTask]]
     @Binding var selectedDate: Date
     
+    var prefilledTitle: String?
+    
     @State private var taskDate: Date
     @State private var title = ""
     @State private var startTime = Date()
@@ -537,10 +546,12 @@ struct AddTaskView: View {
     
     @State private var selectedColorIndex: Int = Int.random(in: 0..<aestheticColors.count)
     
-    init(tasksByDate: Binding<[Date: [ClockTask]]>, selectedDate: Binding<Date>) {
+    init(tasksByDate: Binding<[Date: [ClockTask]]>, selectedDate: Binding<Date>, prefilledTitle: String? = nil) {
         self._tasksByDate = tasksByDate
         self._selectedDate = selectedDate
+        self.prefilledTitle = prefilledTitle
         self._taskDate = State(initialValue: selectedDate.wrappedValue)
+        self._title = State(initialValue: prefilledTitle ?? "")
     }
     
     private var bgColor: Color { currentTheme.bg }
@@ -1551,48 +1562,76 @@ struct TodoView: View {
     @FocusState private var isFocused: Bool
     @State private var showingBulkImport = false
     
+    // Selection for scheduling
+    @State private var isSelectionMode = false
+    @State private var selectedTaskIds = Set<UUID>()
+    
+    var onSchedule: (String) -> Void
+    
     private var bgColor: Color { currentTheme.bg }
     private var goldColor: Color { currentTheme.accent }
 
     var body: some View {
         VStack(spacing: 20) {
-            Text("BRAIN DUMP")
-                .font(.system(size: 14, weight: .regular, design: .serif))
-                .foregroundStyle(goldColor)
-                .tracking(2)
-                .padding(.top, 40)
-            
-            // Quick Add Input
-            HStack(spacing: 12) {
-                TextField("Quick task...", text: $newTaskTitle)
-                    .font(.system(size: 16, weight: .regular))
-                    .foregroundStyle(currentTheme.textForeground)
-                    .tint(goldColor)
-                    .focused($isFocused)
-                    .submitLabel(.done)
-                    .onSubmit {
-                        addTask()
-                    }
+            ZStack {
+                Text("BRAIN DUMP")
+                    .font(.system(size: 14, weight: .regular, design: .serif))
+                    .foregroundStyle(goldColor)
+                    .tracking(2)
                 
-                Button(action: { showingBulkImport = true }) {
-                    Image(systemName: "text.badge.plus")
-                        .font(.system(size: 22))
-                        .foregroundStyle(goldColor)
+                HStack {
+                    Spacer()
+                    Button(action: { 
+                        withAnimation {
+                            isSelectionMode.toggle()
+                            if !isSelectionMode {
+                                selectedTaskIds.removeAll()
+                            }
+                        }
+                    }) {
+                        Image(systemName: isSelectionMode ? "xmark.circle" : "calendar.badge.plus")
+                            .font(.system(size: 20))
+                            .foregroundStyle(goldColor)
+                    }
+                    .padding(.trailing, 40)
                 }
-
-                Button(action: addTask) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 24))
-                        .foregroundStyle(newTaskTitle.isEmpty ? currentTheme.textForeground.opacity(0.3) : goldColor)
-                }
-                .disabled(newTaskTitle.isEmpty)
             }
-            .padding()
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(currentTheme.fieldBg)
-            )
-            .padding(.horizontal, 40)
+            .padding(.top, 40)
+            
+            if !isSelectionMode {
+                // Quick Add Input
+                HStack(spacing: 12) {
+                    TextField("Quick task...", text: $newTaskTitle)
+                        .font(.system(size: 16, weight: .regular))
+                        .foregroundStyle(currentTheme.textForeground)
+                        .tint(goldColor)
+                        .focused($isFocused)
+                        .submitLabel(.done)
+                        .onSubmit {
+                            addTask()
+                        }
+                    
+                    Button(action: { showingBulkImport = true }) {
+                        Image(systemName: "text.badge.plus")
+                            .font(.system(size: 22))
+                            .foregroundStyle(goldColor)
+                    }
+
+                    Button(action: addTask) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 24))
+                            .foregroundStyle(newTaskTitle.isEmpty ? currentTheme.textForeground.opacity(0.3) : goldColor)
+                    }
+                    .disabled(newTaskTitle.isEmpty)
+                }
+                .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(currentTheme.fieldBg)
+                )
+                .padding(.horizontal, 40)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
             
             if brainDumpManager.tasks.isEmpty {
                 Spacer()
@@ -1606,38 +1645,79 @@ struct TodoView: View {
                 }
                 Spacer()
             } else {
-                List {
-                    ForEach(brainDumpManager.tasks) { task in
-                        BrainDumpRow(
-                            title: task.title,
-                            isCompleted: task.isCompleted,
-                            onToggle: {
-                                if let index = brainDumpManager.tasks.firstIndex(where: { $0.id == task.id }) {
-                                    withAnimation {
-                                        brainDumpManager.tasks[index].isCompleted.toggle()
+                ZStack(alignment: .bottom) {
+                    List {
+                        ForEach(brainDumpManager.tasks) { task in
+                            BrainDumpRow(
+                                title: task.title,
+                                isCompleted: task.isCompleted,
+                                isSelected: selectedTaskIds.contains(task.id),
+                                isSelectionMode: isSelectionMode,
+                                onToggle: {
+                                    if isSelectionMode {
+                                        if selectedTaskIds.contains(task.id) {
+                                            selectedTaskIds.remove(task.id)
+                                        } else {
+                                            selectedTaskIds.insert(task.id)
+                                        }
+                                    } else {
+                                        if let index = brainDumpManager.tasks.firstIndex(where: { $0.id == task.id }) {
+                                            withAnimation {
+                                                brainDumpManager.tasks[index].isCompleted.toggle()
+                                            }
+                                            UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+                                        }
                                     }
-                                    UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
                                 }
-                            }
-                        )
-                        .listRowBackground(Color.clear)
-                        .listRowInsets(EdgeInsets(top: 14, leading: 40, bottom: 14, trailing: 40))
-                        .listRowSeparator(.hidden)
-                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                            Button(role: .destructive) {
-                                if let index = brainDumpManager.tasks.firstIndex(where: { $0.id == task.id }) {
-                                    withAnimation {
-                                        brainDumpManager.tasks.remove(at: index)
+                            )
+                            .listRowBackground(Color.clear)
+                            .listRowInsets(EdgeInsets(top: 14, leading: 40, bottom: 14, trailing: 40))
+                            .listRowSeparator(.hidden)
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button(role: .destructive) {
+                                    if let index = brainDumpManager.tasks.firstIndex(where: { $0.id == task.id }) {
+                                        withAnimation {
+                                            brainDumpManager.tasks.remove(at: index)
+                                        }
                                     }
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
                                 }
-                            } label: {
-                                Label("Delete", systemImage: "trash")
                             }
                         }
                     }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+
+                    if isSelectionMode && !selectedTaskIds.isEmpty {
+                        Button(action: {
+                            if let firstId = selectedTaskIds.first,
+                               let task = brainDumpManager.tasks.first(where: { $0.id == firstId }) {
+                                onSchedule(task.title)
+                                // We don't remove it yet because AddTaskView might be cancelled
+                                // But the user asked for it to open up.
+                                withAnimation {
+                                    isSelectionMode = false
+                                    selectedTaskIds.removeAll()
+                                }
+                            }
+                        }) {
+                            Text("Schedule Selected")
+                                .font(.system(size: 16, weight: .medium, design: .serif))
+                                .foregroundStyle(currentTheme.bg)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 16)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(goldColor)
+                                        .shadow(color: .black.opacity(0.3), radius: 5, x: 2, y: 4)
+                                )
+                                .padding(.horizontal, 40)
+                                .padding(.bottom, 20)
+                        }
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
                 }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
             }
         }
         .sheet(isPresented: $showingBulkImport) {
@@ -1659,23 +1739,32 @@ struct BrainDumpRow: View {
     @AppStorage("appTheme") private var currentTheme: AppTheme = .sage
     var title: String
     var isCompleted: Bool
+    var isSelected: Bool = false
+    var isSelectionMode: Bool = false
     var onToggle: () -> Void
 
     var body: some View {
-        HStack(spacing: 16) {
-            Button(action: onToggle) {
-                Image(systemName: isCompleted ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 22, weight: .light))
-                    .foregroundStyle(isCompleted ? currentTheme.textForeground.opacity(0.3) : currentTheme.accent)
+        Button(action: onToggle) {
+            HStack(spacing: 16) {
+                if isSelectionMode {
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 22, weight: .light))
+                        .foregroundStyle(isSelected ? currentTheme.accent : currentTheme.textForeground.opacity(0.3))
+                } else {
+                    Image(systemName: isCompleted ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 22, weight: .light))
+                        .foregroundStyle(isCompleted ? currentTheme.textForeground.opacity(0.3) : currentTheme.accent)
+                }
+
+                Text(title)
+                    .font(.system(size: 16, weight: .regular))
+                    .foregroundStyle(currentTheme.textForeground.opacity(isCompleted ? 0.4 : 0.9))
+                    .strikethrough(isCompleted && !isSelectionMode, color: currentTheme.textForeground.opacity(0.4))
+
+                Spacer()
             }
-
-            Text(title)
-                .font(.system(size: 16, weight: .regular))
-                .foregroundStyle(currentTheme.textForeground.opacity(isCompleted ? 0.4 : 0.9))
-                .strikethrough(isCompleted, color: currentTheme.textForeground.opacity(0.4))
-
-            Spacer()
         }
+        .buttonStyle(.plain)
     }
 }
 
