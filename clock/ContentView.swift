@@ -1497,6 +1497,41 @@ struct ProfileSettingsView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 12) {
+                        Text("GUIDE")
+                            .font(.system(size: 12, weight: .regular, design: .serif))
+                            .foregroundStyle(goldColor)
+                            .tracking(1)
+                            .padding(.horizontal, 4)
+
+                        Button(action: {
+                            @AppStorage("hasCompletedOnboarding") var hasCompletedOnboarding = false
+                            withAnimation(.spring()) {
+                                hasCompletedOnboarding = false
+                            }
+                        }) {
+                            HStack(spacing: 12) {
+                                Image(systemName: "hand.raised.fill")
+                                    .foregroundStyle(goldColor)
+                                Text("Show Welcome Guide")
+                                    .font(.system(size: 16, weight: .medium, design: .serif))
+                                    .foregroundStyle(currentTheme.textForeground.opacity(0.9))
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(goldColor.opacity(0.6))
+                            }
+                            .padding()
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(currentTheme.fieldBg)
+                                    .shadow(color: currentTheme.shadowDark, radius: 5, x: 4, y: 4)
+                                    .shadow(color: currentTheme.shadowLight, radius: 5, x: -4, y: -4)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    VStack(alignment: .leading, spacing: 12) {
                         Text("CALENDARS")
                             .font(.system(size: 12, weight: .regular, design: .serif))
                             .foregroundStyle(goldColor)
