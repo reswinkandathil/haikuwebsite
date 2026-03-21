@@ -8,6 +8,7 @@ struct StaticClockView: View {
     var showHands: Bool = true
     var showText: Bool = true
     var showCenterText: Bool = true
+    var animationProgress: Double = 1.0
 
     // Themed Palette
     private var clockFaceColor: Color { theme.bg }
@@ -20,7 +21,8 @@ struct StaticClockView: View {
     // Helper to get current minutes from midnight
     private var currentMinute: Double {
         let comps = Calendar.current.dateComponents([.hour, .minute, .second], from: now)
-        return Double((comps.hour ?? 0) * 60 + (comps.minute ?? 0)) + Double(comps.second ?? 0) / 60.0
+        let totalMins = Double((comps.hour ?? 0) * 60 + (comps.minute ?? 0)) + Double(comps.second ?? 0) / 60.0
+        return totalMins * animationProgress
     }
     
     private var activeTask: ClockTask? {
@@ -76,6 +78,7 @@ struct StaticClockView: View {
                         let r = is24HourClock ? pmRingRadius : (frag.isAM ? amRingRadius : pmRingRadius)
 
                         TaskArc(startMinutes: frag.startMinutes, endMinutes: frag.endMinutes, is24HourClock: is24HourClock)
+                            .trim(from: 0, to: animationProgress)
                             .stroke(task.color.opacity(opacity), style: StrokeStyle(lineWidth: ringWidth, lineCap: .round))
                             .frame(width: r * 2, height: r * 2)
                     }

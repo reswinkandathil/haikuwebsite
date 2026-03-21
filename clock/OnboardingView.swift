@@ -101,6 +101,7 @@ struct OnboardingStepView: View {
     let theme: AppTheme
     
     @State private var isAnimating = false
+    @State private var animationProgress: Double = 0.0
     
     // Mock tasks for Step 1
     private let mockTasks = [
@@ -124,7 +125,8 @@ struct OnboardingStepView: View {
                         theme: theme,
                         showHands: true,
                         showText: true,
-                        showCenterText: false
+                        showCenterText: false,
+                        animationProgress: animationProgress
                     )
                     .frame(width: 280, height: 280)
                     .scaleEffect(isAnimating ? 1.0 : 0.8)
@@ -132,6 +134,9 @@ struct OnboardingStepView: View {
                     .onAppear {
                         withAnimation(.spring(response: 0.8, dampingFraction: 0.6)) {
                             isAnimating = true
+                        }
+                        withAnimation(.easeInOut(duration: 1.5).delay(0.2)) {
+                            animationProgress = 1.0
                         }
                     }
                 } else if step == 1 {
