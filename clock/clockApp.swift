@@ -10,6 +10,7 @@ import SwiftUI
 @main
 struct clockApp: App {
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+    @AppStorage("isPro") private var isPro = false
     
     var body: some Scene {
         WindowGroup {

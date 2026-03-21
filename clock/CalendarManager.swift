@@ -71,8 +71,57 @@ class CalendarManager: ObservableObject {
                 startMinutes: sMin,
                 endMinutes: eMin,
                 color: color,
-                url: meetingUrl
+                url: meetingUrl,
+                externalEventId: event.eventIdentifier
             )
         }.sorted { $0.startMinutes < $1.startMinutes }
+    }
+
+    func saveTask(_ task: ClockTask, date: Date) -> String? {
+        let event = EKEvent(eventStore: eventStore)
+        event.title = task.title
+        event.startDate = dateFromMinutes(task.startMinutes, on: date)
+        event.endDate = dateFromMinutes(task.endMinutes, on: date)
+        event.calendar = eventStore.defaultCalendarForNewEvents
+        
+        do {
+            try eventStore.save(event, span: .thisEvent)
+            return event.eventIdentifier
+        } catch {
+            print("Error saving event to Calendar: \(error)")
+            return nil
+        }
+    }
+
+    func updateTask(_ task: ClockTask, date: Date) {
+        guard let externalId = task.externalEventId,
+              let event = eventStore.event(withIdentifier: externalId) else { return }
+        
+        event.title = task.title
+        event.startDate = dateFromMinutes(task.startMinutes, on: date)
+        event.endDate = dateFromMinutes(task.endMinutes, on: date)
+        
+        do {
+            try eventStore.save(event, span: .thisEvent)
+        } catch {
+            print("Error updating event in Calendar: \(error)")
+        }
+    }
+
+    func deleteTask(externalId: String) {
+        guard let event = eventStore.event(withIdentifier: externalId) else { return }
+        do {
+            try eventStore.remove(event, span: .thisEvent)
+        } catch {
+            print("Error deleting event from Calendar: \(error)")
+        }
+    }
+
+    private func dateFromMinutes(_ minutes: Int, on date: Date) -> Date {
+        let cal = Calendar.current
+        var comps = cal.dateComponents([.year, .month, .day], from: date)
+        comps.hour = minutes / 60
+        comps.minute = minutes % 60
+        return cal.date(from: comps) ?? date
     }
 }

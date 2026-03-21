@@ -4,6 +4,7 @@ import WidgetKit
 
 struct ContentView: View {
     @AppStorage("appTheme") private var currentTheme: AppTheme = .sage
+    @AppStorage("isPro") private var isPro = false
     @State private var now = Date()
     // Slow down timer in Canvas to prevent update loop crashes
     private let timer = Timer.publish(
@@ -50,6 +51,7 @@ struct ContentView: View {
     @State private var customOffsetString = ""
     @State private var prefilledTaskTitle: String? = nil
     @State private var prefilledTaskId: UUID? = nil
+    @State private var taskToEdit: ClockTask? = nil
     @AppStorage("is24HourClock") private var is24HourClock = false
     @AppStorage("notificationOffsetsData") private var notificationOffsetsData = ""
 
@@ -100,6 +102,7 @@ struct ContentView: View {
                             Spacer()
                             Button(action: { 
                                 prefilledTaskTitle = nil
+                                taskToEdit = nil
                                 showingAddTask = true 
                             }) {
                                 Image(systemName: "plus")
@@ -131,6 +134,7 @@ struct ContentView: View {
                         TodoView(onSchedule: { title, id in
                             prefilledTaskTitle = title
                             prefilledTaskId = id
+                            taskToEdit = nil
                             showingAddTask = true
                         })
                     } else if selectedTab == .analytics {
@@ -284,7 +288,7 @@ struct ContentView: View {
             }
         }
         .sheet(isPresented: $showingAddTask) {
-            AddTaskView(tasksByDate: $tasksByDate, selectedDate: $selectedDate, prefilledTitle: prefilledTaskTitle, brainDumpTaskId: prefilledTaskId)
+            AddTaskView(tasksByDate: $tasksByDate, selectedDate: $selectedDate, prefilledTitle: prefilledTaskTitle, brainDumpTaskId: prefilledTaskId, taskToEdit: taskToEdit)
         }
         .sheet(isPresented: $showingDatePicker) {
             NavigationStack {
@@ -360,17 +364,36 @@ struct ContentView: View {
     }
 
     private func syncCalendar(for date: Date) {
-        calendarManager.requestAccess { granted in
-            if granted {
-                let fetched = calendarManager.fetchEvents(for: date, theme: currentTheme)
-                if !fetched.isEmpty {
+        // Multi-calendar sync is a Pro feature
+        if isPro {
+            calendarManager.requestAccess { granted in
+                if granted {
+                    let fetched = calendarManager.fetchEvents(for: date, theme: currentTheme)
+                    
                     DispatchQueue.main.async {
                         var current = tasksByDate[date, default: []]
+                        
                         for fetchedTask in fetched {
-                            if !current.contains(where: { $0.title == fetchedTask.title && $0.startMinutes == fetchedTask.startMinutes }) {
+                            if let index = current.firstIndex(where: { $0.externalEventId == fetchedTask.externalEventId }) {
+                                // Update existing task if properties changed
+                                if current[index].title != fetchedTask.title ||
+                                   current[index].startMinutes != fetchedTask.startMinutes ||
+                                   current[index].endMinutes != fetchedTask.endMinutes {
+                                    current[index].title = fetchedTask.title
+                                    current[index].startMinutes = fetchedTask.startMinutes
+                                    current[index].endMinutes = fetchedTask.endMinutes
+                                }
+                            } else {
+                                // Add new task from external calendar
                                 current.append(fetchedTask)
                             }
                         }
+                        
+                        // Remove tasks that no longer exist in Apple Calendar but have an external ID
+                        current.removeAll { task in
+                            task.externalEventId != nil && !fetched.contains(where: { $0.externalEventId == task.externalEventId })
+                        }
+                        
                         current.sort { $0.startMinutes < $1.startMinutes }
                         tasksByDate[date] = current
                     }
@@ -417,25 +440,34 @@ struct ContentView: View {
                     List {
                         ForEach(tasksByDate[selectedDate, default: []]) { task in
                             let timeString = "\(formatTime(minutes: task.startMinutes)) - \(formatTime(minutes: task.endMinutes))"
-                            TaskRow(
-                                time: timeString,
-                                title: task.title,
-                                color: task.color
-                            )
-                                .listRowBackground(Color.clear)
-                                .listRowInsets(EdgeInsets(top: 14, leading: 40, bottom: 14, trailing: 40))
-                                .listRowSeparator(.hidden)
-                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                    Button(role: .destructive) {
-                                        if let index = tasksByDate[selectedDate]?.firstIndex(where: { $0.id == task.id }) {
-                                            withAnimation {
-                                                tasksByDate[selectedDate]?.remove(at: index)
-                                            }
+                            Button(action: {
+                                taskToEdit = task
+                                showingAddTask = true
+                            }) {
+                                TaskRow(
+                                    time: timeString,
+                                    title: task.title,
+                                    color: task.color
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .listRowBackground(Color.clear)
+                            .listRowInsets(EdgeInsets(top: 14, leading: 40, bottom: 14, trailing: 40))
+                            .listRowSeparator(.hidden)
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button(role: .destructive) {
+                                    if let index = tasksByDate[selectedDate]?.firstIndex(where: { $0.id == task.id }) {
+                                        if isPro, let extId = task.externalEventId {
+                                            calendarManager.deleteTask(externalId: extId)
                                         }
-                                    } label: {
-                                        Label("Delete", systemImage: "trash")
+                                        withAnimation {
+                                            tasksByDate[selectedDate]?.remove(at: index)
+                                        }
                                     }
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
                                 }
+                            }
                         }
                     }
                     .listStyle(.plain)
@@ -526,6 +558,7 @@ struct AddTaskView: View {
     
     var prefilledTitle: String?
     var brainDumpTaskId: UUID?
+    var taskToEdit: ClockTask?
     
     @State private var taskDate: Date
     @State private var title = ""
@@ -534,6 +567,7 @@ struct AddTaskView: View {
     
     @StateObject private var categoryManager = CategoryManager()
     @ObservedObject private var brainDumpManager = BrainDumpManager()
+    @StateObject private var calendarManager = CalendarManager()
     @State private var selectedCategoryId: UUID? = nil
     
     @State private var showingNewCategory = false
@@ -541,13 +575,32 @@ struct AddTaskView: View {
     
     @State private var selectedColorIndex: Int = Int.random(in: 0..<aestheticColors.count)
     
-    init(tasksByDate: Binding<[Date: [ClockTask]]>, selectedDate: Binding<Date>, prefilledTitle: String? = nil, brainDumpTaskId: UUID? = nil) {
+    init(tasksByDate: Binding<[Date: [ClockTask]]>, selectedDate: Binding<Date>, prefilledTitle: String? = nil, brainDumpTaskId: UUID? = nil, taskToEdit: ClockTask? = nil) {
         self._tasksByDate = tasksByDate
         self._selectedDate = selectedDate
         self.prefilledTitle = prefilledTitle
         self.brainDumpTaskId = brainDumpTaskId
-        self._taskDate = State(initialValue: selectedDate.wrappedValue)
-        self._title = State(initialValue: prefilledTitle ?? "")
+        self.taskToEdit = taskToEdit
+        
+        let initialDate = taskToEdit != nil ? selectedDate.wrappedValue : selectedDate.wrappedValue
+        self._taskDate = State(initialValue: initialDate)
+        
+        if let toEdit = taskToEdit {
+            self._title = State(initialValue: toEdit.title)
+            
+            let cal = Calendar.current
+            var sComps = cal.dateComponents([.year, .month, .day], from: initialDate)
+            sComps.hour = toEdit.startMinutes / 60
+            sComps.minute = toEdit.startMinutes % 60
+            self._startTime = State(initialValue: cal.date(from: sComps) ?? Date())
+            
+            var eComps = cal.dateComponents([.year, .month, .day], from: initialDate)
+            eComps.hour = toEdit.endMinutes / 60
+            eComps.minute = toEdit.endMinutes % 60
+            self._endTime = State(initialValue: cal.date(from: eComps) ?? Date())
+        } else {
+            self._title = State(initialValue: prefilledTitle ?? "")
+        }
     }
     
     private var bgColor: Color { currentTheme.bg }
@@ -742,7 +795,7 @@ struct AddTaskView: View {
                         
                         // Add Button
                         Button(action: saveTask) {
-                            Text("Add to Agenda")
+                            Text(taskToEdit == nil ? "Add to Agenda" : "Update Task")
                                 .font(.system(size: 16, weight: .medium, design: .serif))
                                 .foregroundStyle(bgColor)
                                 .frame(maxWidth: .infinity)
@@ -758,7 +811,7 @@ struct AddTaskView: View {
                     .padding(32)
                 }
             }
-            .navigationTitle("New Task")
+            .navigationTitle(taskToEdit == nil ? "New Task" : "Edit Task")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(bgColor, for: .navigationBar)
             .toolbarColorScheme(.dark, for: .navigationBar)
@@ -770,7 +823,9 @@ struct AddTaskView: View {
                 }
             }
             .onAppear {
-                pickDistinctColor()
+                if taskToEdit == nil {
+                    pickDistinctColor()
+                }
             }
             .sheet(isPresented: $showingNewCategory) {
                 NewCategoryView(categoryManager: categoryManager, selectedCategoryId: $selectedCategoryId, theme: currentTheme)
@@ -807,28 +862,72 @@ struct AddTaskView: View {
         let colorToUse: Color
         if let id = selectedCategoryId, let cat = categoryManager.categories.first(where: { $0.id == id }) {
             colorToUse = cat.color
+        } else if let toEdit = taskToEdit {
+            colorToUse = toEdit.color
         } else {
             colorToUse = aestheticColors[selectedColorIndex].color
         }
         
-        let newTask = ClockTask(
-            title: title.isEmpty ? "New Task" : title,
-            startMinutes: sMin,
-            endMinutes: eMin,
-            color: colorToUse
-        )
-        
         let day = cal.startOfDay(for: taskDate)
-        var dayTasks = tasksByDate[day, default: []]
-        dayTasks.append(newTask)
-        dayTasks.sort { $0.startMinutes < $1.startMinutes }
-        tasksByDate[day] = dayTasks
         
-        // Update BrainDumpTask if needed
-        if let bdtid = brainDumpTaskId {
-            if let index = brainDumpManager.tasks.firstIndex(where: { $0.id == bdtid }) {
-                brainDumpManager.tasks[index].scheduledDate = day
-                brainDumpManager.sortTasks()
+        @AppStorage("isPro") var isPro = false
+        
+        if let toEdit = taskToEdit {
+            // Remove old version if date changed
+            if cal.startOfDay(for: selectedDate) != day {
+                tasksByDate[selectedDate]?.removeAll { $0.id == toEdit.id }
+            }
+            
+            var updatedTask = toEdit
+            updatedTask.title = title.isEmpty ? "Updated Task" : title
+            updatedTask.startMinutes = sMin
+            updatedTask.endMinutes = eMin
+            updatedTask.color = colorToUse
+            
+            // Sync update to Apple Calendar if Pro
+            if isPro {
+                if updatedTask.externalEventId != nil {
+                    calendarManager.updateTask(updatedTask, date: day)
+                } else if let extId = calendarManager.saveTask(updatedTask, date: day) {
+                    updatedTask.externalEventId = extId
+                }
+            }
+            
+            var dayTasks = tasksByDate[day, default: []]
+            if let idx = dayTasks.firstIndex(where: { $0.id == toEdit.id }) {
+                dayTasks[idx] = updatedTask
+            } else {
+                dayTasks.append(updatedTask)
+            }
+            dayTasks.sort { $0.startMinutes < $1.startMinutes }
+            tasksByDate[day] = dayTasks
+            
+        } else {
+            var newTask = ClockTask(
+                title: title.isEmpty ? "New Task" : title,
+                startMinutes: sMin,
+                endMinutes: eMin,
+                color: colorToUse
+            )
+            
+            // Push to Apple Calendar if Pro
+            if isPro {
+                if let extId = calendarManager.saveTask(newTask, date: day) {
+                    newTask.externalEventId = extId
+                }
+            }
+            
+            var dayTasks = tasksByDate[day, default: []]
+            dayTasks.append(newTask)
+            dayTasks.sort { $0.startMinutes < $1.startMinutes }
+            tasksByDate[day] = dayTasks
+            
+            // Update BrainDumpTask if needed
+            if let bdtid = brainDumpTaskId {
+                if let index = brainDumpManager.tasks.firstIndex(where: { $0.id == bdtid }) {
+                    brainDumpManager.tasks[index].scheduledDate = day
+                    brainDumpManager.sortTasks()
+                }
             }
         }
         
@@ -1079,9 +1178,11 @@ struct TabBarButton: View {
 
 struct ProfileAnalyticsView: View {
     @AppStorage("appTheme") private var currentTheme: AppTheme = .sage
+    @AppStorage("isPro") private var isPro = false
     var tasksByDate: [Date: [ClockTask]]
     
     @StateObject private var categoryManager = CategoryManager()
+    @State private var showingPaywall = false
     
     private var bgColor: Color { currentTheme.bg }
     private var fieldBgColor: Color { currentTheme.fieldBg }
@@ -1132,6 +1233,65 @@ struct ProfileAnalyticsView: View {
         stats.reduce(0) { $0 + $1.minutes } / 60.0
     }
     
+    // Pro Data: Weekly comparison
+    private var momentumData: (current: [Double], previous: [Double]) {
+        let cal = Calendar.current
+        var current: [Double] = []
+        var previous: [Double] = []
+        let today = cal.startOfDay(for: Date())
+        
+        for i in (0..<7).reversed() {
+            if let date = cal.date(byAdding: .day, value: -i, to: today) {
+                let total = tasksByDate[date, default: []].reduce(0.0) { $0 + Double($1.endMinutes - $1.startMinutes) }
+                current.append(total / 60.0)
+            }
+            if let date = cal.date(byAdding: .day, value: -(i + 7), to: today) {
+                let total = tasksByDate[date, default: []].reduce(0.0) { $0 + Double($1.endMinutes - $1.startMinutes) }
+                previous.append(total / 60.0)
+            }
+        }
+        return (current, previous)
+    }
+    
+    // Pro Data: Peak Focus (Hourly Density)
+    private var hourlyDensity: [Int: Int] {
+        var counts = [Int: Int]()
+        for i in 0..<24 { counts[i] = 0 }
+        
+        for (_, tasks) in tasksByDate {
+            for task in tasks {
+                let startHour = task.startMinutes / 60
+                let endHour = task.endMinutes / 60
+                for h in startHour...endHour {
+                    if h < 24 { counts[h, default: 0] += 1 }
+                }
+            }
+        }
+        return counts
+    }
+    
+    private var peakHour: Int {
+        hourlyDensity.max { $0.value < $1.value }?.key ?? 9
+    }
+    
+    private var deepWorkRatio: (deep: Double, shallow: Double) {
+        var deep: Double = 0
+        var shallow: Double = 0
+        for (_, tasks) in tasksByDate {
+            for task in tasks {
+                let duration = task.endMinutes - task.startMinutes
+                if duration >= 60 {
+                    deep += Double(duration)
+                } else {
+                    shallow += Double(duration)
+                }
+            }
+        }
+        let total = deep + shallow
+        if total == 0 { return (0, 0) }
+        return (deep / total, shallow / total)
+    }
+    
     private func formatDuration(_ minutes: Double) -> String {
         let h = Int(minutes) / 60
         let m = Int(minutes) % 60
@@ -1162,7 +1322,7 @@ struct ProfileAnalyticsView: View {
                     }
                     .padding(.top, 100)
                 } else {
-                    // Top Stat Cards
+                    // 1. Basic Stats
                     HStack(spacing: 16) {
                         StatCard(title: "Total Time", value: String(format: "%.1fh", totalHours), icon: "clock.fill", color: goldColor)
                         
@@ -1172,9 +1332,146 @@ struct ProfileAnalyticsView: View {
                     }
                     .padding(.horizontal, 32)
                     
-                    // Donut Chart
+                    // 2. PRO SECTION: Peak Focus Window (VITAL)
+                    VStack(alignment: .leading, spacing: 16) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("PEAK FOCUS WINDOW")
+                                    .font(.system(size: 12, weight: .regular, design: .serif))
+                                    .foregroundStyle(goldColor)
+                                    .tracking(1)
+                                
+                                if isPro {
+                                    Text("Your rhythm peaks at \(peakHour):00")
+                                        .font(.system(size: 16, weight: .bold, design: .serif))
+                                        .foregroundStyle(currentTheme.textForeground)
+                                }
+                            }
+                            
+                            Spacer()
+                            
+                            if !isPro {
+                                Image(systemName: "crown.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(goldColor)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(goldColor.opacity(0.1))
+                                    .clipShape(Capsule())
+                            }
+                        }
+                        .padding(.horizontal, 4)
+                        
+                        ZStack {
+                            PeakFocusChart(density: isPro ? hourlyDensity : [9: 2, 10: 5, 11: 4, 12: 1], theme: currentTheme)
+                                .frame(height: 100)
+                                .blur(radius: isPro ? 0 : 8)
+                            
+                            if !isPro {
+                                Button(action: { showingPaywall = true }) {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: "lock.fill")
+                                        Text("Unlock Power Hours")
+                                    }
+                                    .font(.system(size: 12, weight: .bold, design: .serif))
+                                    .foregroundStyle(goldColor)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 8)
+                                    .background(fieldBgColor)
+                                    .clipShape(Capsule())
+                                    .shadow(radius: 5)
+                                }
+                            }
+                        }
+                        .padding()
+                        .background(
+                            RoundedRectangle(cornerRadius: 20)
+                                .fill(fieldBgColor)
+                                .shadow(color: shadowDark, radius: 5, x: 4, y: 4)
+                        )
+                        
+                        if isPro {
+                            Text("Insight: You are most productive in the \(peakHour < 12 ? "morning" : "afternoon"). Try scheduling your highest-priority 'Deep Work' during this window.")
+                                .font(.system(size: 12, design: .serif))
+                                .foregroundStyle(currentTheme.textForeground.opacity(0.6))
+                                .padding(.horizontal, 4)
+                        }
+                    }
+                    .padding(.horizontal, 32)
+
+                    // 3. PRO SECTION: Focus Momentum (VITAL)
+                    VStack(alignment: .leading, spacing: 16) {
+                        HStack {
+                            Text("FOCUS MOMENTUM")
+                                .font(.system(size: 12, weight: .regular, design: .serif))
+                                .foregroundStyle(goldColor)
+                                .tracking(1)
+                            
+                            Spacer()
+                            
+                            if !isPro {
+                                Image(systemName: "crown.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(goldColor)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(goldColor.opacity(0.1))
+                                    .clipShape(Capsule())
+                            }
+                        }
+                        .padding(.horizontal, 4)
+                        
+                        ZStack {
+                            let data = momentumData
+                            MomentumChart(current: isPro ? data.current : [2, 4, 3, 5, 4, 6, 4], 
+                                         previous: isPro ? data.previous : [3, 3, 4, 4, 3, 5, 3], 
+                                         theme: currentTheme)
+                                .frame(height: 120)
+                                .blur(radius: isPro ? 0 : 8)
+                            
+                            if !isPro {
+                                Button(action: { showingPaywall = true }) {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: "lock.fill")
+                                        Text("Unlock Momentum")
+                                    }
+                                    .font(.system(size: 12, weight: .bold, design: .serif))
+                                    .foregroundStyle(goldColor)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 8)
+                                    .background(fieldBgColor)
+                                    .clipShape(Capsule())
+                                    .shadow(radius: 5)
+                                }
+                            }
+                        }
+                        .padding()
+                        .background(
+                            RoundedRectangle(cornerRadius: 20)
+                                .fill(fieldBgColor)
+                                .shadow(color: shadowDark, radius: 5, x: 4, y: 4)
+                        )
+                        
+                        if isPro {
+                            let curTotal = momentumData.current.reduce(0, +)
+                            let prevTotal = momentumData.previous.reduce(0, +)
+                            let diff = curTotal - prevTotal
+                            
+                            HStack {
+                                Image(systemName: diff >= 0 ? "arrow.up.right.circle.fill" : "arrow.down.right.circle.fill")
+                                    .foregroundStyle(diff >= 0 ? .green : .red)
+                                Text(diff >= 0 ? "You've focused \(String(format: "%.1f", diff))h more than last week. Great work!" : "Your focus is down by \(String(format: "%.1f", abs(diff)))h this week. Time to reset?")
+                                    .font(.system(size: 12, design: .serif))
+                                    .foregroundStyle(currentTheme.textForeground.opacity(0.6))
+                            }
+                            .padding(.horizontal, 4)
+                        }
+                    }
+                    .padding(.horizontal, 32)
+                    
+                    // 4. Donut Chart
                     VStack(spacing: 24) {
-                        Text("Time Distribution")
+                        Text("TIME DISTRIBUTION")
                             .font(.system(size: 12, weight: .medium, design: .serif))
                             .foregroundStyle(currentTheme.textForeground.opacity(0.6))
                             .tracking(1)
@@ -1200,7 +1497,7 @@ struct ProfileAnalyticsView: View {
                     }
                     .padding(.vertical, 16)
                     
-                    // Detailed Breakdown
+                    // 5. Detailed Breakdown
                     VStack(alignment: .leading, spacing: 16) {
                         Text("BREAKDOWN")
                             .font(.system(size: 12, weight: .regular, design: .serif))
@@ -1260,6 +1557,9 @@ struct ProfileAnalyticsView: View {
             }
         }
         .scrollIndicators(.hidden)
+        .sheet(isPresented: $showingPaywall) {
+            HaikuProView()
+        }
     }
 }
 
@@ -1339,11 +1639,87 @@ struct DonutChart: View {
     }
 }
 
+struct WeeklyTrendChart: View {
+    let data: [Double]
+    let theme: AppTheme
+    
+    var body: some View {
+        GeometryReader { proxy in
+            Path { path in
+                let step = proxy.size.width / CGFloat(max(1, data.count - 1))
+                let maxVal = max(1, data.max() ?? 1)
+                let height = proxy.size.height
+                
+                for i in data.indices {
+                    let x = step * CGFloat(i)
+                    let y = height - (CGFloat(data[i] / maxVal) * height)
+                    if i == 0 {
+                        path.move(to: CGPoint(x: x, y: y))
+                    } else {
+                        path.addLine(to: CGPoint(x: x, y: y))
+                    }
+                }
+            }
+            .stroke(theme.accent, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+            .shadow(color: theme.accent.opacity(0.3), radius: 4, y: 4)
+        }
+    }
+}
+
+struct PeakFocusChart: View {
+    let density: [Int: Int]
+    let theme: AppTheme
+    
+    var body: some View {
+        HStack(alignment: .bottom, spacing: 4) {
+            let maxVal = max(1, density.values.max() ?? 1)
+            ForEach(0..<24) { hour in
+                let val = density[hour] ?? 0
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(theme.accent.opacity(val == 0 ? 0.1 : Double(val) / Double(maxVal)))
+                    .frame(height: CGFloat(val) / CGFloat(maxVal) * 80 + 5)
+            }
+        }
+    }
+}
+
+struct MomentumChart: View {
+    let current: [Double]
+    let previous: [Double]
+    let theme: AppTheme
+    
+    var body: some View {
+        ZStack {
+            // Previous week (ghost line)
+            GeometryReader { proxy in
+                Path { path in
+                    let step = proxy.size.width / CGFloat(max(1, previous.count - 1))
+                    let maxVal = max(1, (current + previous).max() ?? 1)
+                    let height = proxy.size.height
+                    
+                    for i in previous.indices {
+                        let x = step * CGFloat(i)
+                        let y = height - (CGFloat(previous[i] / maxVal) * height)
+                        if i == 0 { path.move(to: CGPoint(x: x, y: y)) }
+                        else { path.addLine(to: CGPoint(x: x, y: y)) }
+                    }
+                }
+                .stroke(theme.textForeground.opacity(0.1), style: StrokeStyle(lineWidth: 2, dash: [5, 5]))
+            }
+            
+            // Current week (bold line)
+            WeeklyTrendChart(data: current, theme: theme)
+        }
+    }
+}
+
 struct ProfileSettingsView: View {
     @AppStorage("appTheme") private var currentTheme: AppTheme = .sage
     @AppStorage("notificationOffsetsData") private var notificationOffsetsData = ""
+    @AppStorage("isPro") private var isPro = false
     @Binding var is24HourClock: Bool
     @Binding var showingCustomOffsetAlert: Bool
+    @State private var showingPaywall = false
 
     private var bgColor: Color { currentTheme.bg }
     private var goldColor: Color { currentTheme.accent }
@@ -1372,6 +1748,28 @@ struct ProfileSettingsView: View {
                     .foregroundStyle(goldColor)
                     .tracking(2)
                     .padding(.top, 40)
+
+                if !isPro {
+                    Button(action: { showingPaywall = true }) {
+                        HStack {
+                            Image(systemName: "crown.fill")
+                                .foregroundStyle(goldColor)
+                            Text("Upgrade to Haiku Pro")
+                                .font(.system(size: 16, weight: .bold, design: .serif))
+                                .foregroundStyle(currentTheme.bg)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(currentTheme.bg.opacity(0.6))
+                        }
+                        .padding()
+                        .background(goldColor)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .shadow(color: goldColor.opacity(0.3), radius: 10, y: 5)
+                    }
+                    .padding(.horizontal, 40)
+                    .buttonStyle(.plain)
+                }
 
                 VStack(spacing: 20) {
                     Toggle("24-Hour Clock", isOn: $is24HourClock)
@@ -1417,7 +1815,7 @@ struct ProfileSettingsView: View {
                                         RoundedRectangle(cornerRadius: 12)
                                             .fill(currentTheme.fieldBg)
                                             .shadow(color: currentTheme.shadowDark, radius: isSelected ? 2 : 5, x: isSelected ? 2 : 4, y: isSelected ? 2 : 4)
-                                            .shadow(color: currentTheme.shadowLight, radius: isSelected ? 2 : 5, x: isSelected ? -2 : -4, y: isSelected ? -2 : -4)
+                                            .shadow(color: currentTheme.shadowLight, radius: isSelected ? 2 : 5, x: -4, y: -4)
                                     )
                                 }
                                 .buttonStyle(.plain)
@@ -1425,12 +1823,16 @@ struct ProfileSettingsView: View {
                             
                             // Custom Button
                             Button(action: { 
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                    showingCustomOffsetAlert = true 
+                                if isPro {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                        showingCustomOffsetAlert = true 
+                                    }
+                                } else {
+                                    showingPaywall = true
                                 }
                             }) {
                                 HStack {
-                                    Image(systemName: "plus")
+                                    Image(systemName: isPro ? "plus" : "lock.fill")
                                         .font(.system(size: 14, weight: .bold))
                                         .foregroundStyle(goldColor)
                                     Text("Add Custom Time")
@@ -1497,41 +1899,6 @@ struct ProfileSettingsView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("GUIDE")
-                            .font(.system(size: 12, weight: .regular, design: .serif))
-                            .foregroundStyle(goldColor)
-                            .tracking(1)
-                            .padding(.horizontal, 4)
-
-                        Button(action: {
-                            @AppStorage("hasCompletedOnboarding") var hasCompletedOnboarding = false
-                            withAnimation(.spring()) {
-                                hasCompletedOnboarding = false
-                            }
-                        }) {
-                            HStack(spacing: 12) {
-                                Image(systemName: "hand.raised.fill")
-                                    .foregroundStyle(goldColor)
-                                Text("Show Welcome Guide")
-                                    .font(.system(size: 16, weight: .medium, design: .serif))
-                                    .foregroundStyle(currentTheme.textForeground.opacity(0.9))
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .foregroundStyle(goldColor.opacity(0.6))
-                            }
-                            .padding()
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(currentTheme.fieldBg)
-                                    .shadow(color: currentTheme.shadowDark, radius: 5, x: 4, y: 4)
-                                    .shadow(color: currentTheme.shadowLight, radius: 5, x: -4, y: -4)
-                            )
-                        }
-                        .buttonStyle(.plain)
-                    }
-
-                    VStack(alignment: .leading, spacing: 12) {
                         Text("CALENDARS")
                             .font(.system(size: 12, weight: .regular, design: .serif))
                             .foregroundStyle(goldColor)
@@ -1540,14 +1907,18 @@ struct ProfileSettingsView: View {
 
                         VStack(spacing: 8) {
                             Button(action: {
-                                if let url = URL(string: "App-Prefs:root=CALENDAR"), UIApplication.shared.canOpenURL(url) {
-                                    UIApplication.shared.open(url)
-                                } else if let url = URL(string: UIApplication.openSettingsURLString) {
-                                    UIApplication.shared.open(url)
+                                if isPro {
+                                    if let url = URL(string: "App-Prefs:root=CALENDAR"), UIApplication.shared.canOpenURL(url) {
+                                        UIApplication.shared.open(url)
+                                    } else if let url = URL(string: UIApplication.openSettingsURLString) {
+                                        UIApplication.shared.open(url)
+                                    }
+                                } else {
+                                    showingPaywall = true
                                 }
                             }) {
                                 HStack(spacing: 12) {
-                                    Image(systemName: "calendar")
+                                    Image(systemName: isPro ? "calendar" : "lock.fill")
                                         .foregroundStyle(goldColor)
                                     Text("Open Calendar Settings")
                                         .font(.system(size: 16, weight: .medium))
@@ -1564,17 +1935,21 @@ struct ProfileSettingsView: View {
                             }
                             .buttonStyle(.plain)
                             
-                            Text("Go to Settings > Apps > Calendar > Calendar Accounts to connect Google, Microsoft, or iCloud.")
+                            Text("Connect Google, Microsoft, or iCloud.")
                                 .font(.system(size: 11, weight: .regular))
                                 .foregroundStyle(currentTheme.textForeground.opacity(0.6))
                                 .multilineTextAlignment(.center)
                                 .padding(.horizontal, 8)
                         }
+                        .opacity(isPro ? 1.0 : 0.6)
                     }
                 }
                 .padding(.horizontal, 40)
                 .padding(.bottom, 40)
             }
+        }
+        .sheet(isPresented: $showingPaywall) {
+            HaikuProView()
         }
     }
 }
@@ -1826,3 +2201,166 @@ struct BrainDumpRow: View {
     ContentView()
 }
 
+struct HaikuProView: View {
+    @AppStorage("appTheme") private var currentTheme: AppTheme = .sage
+    @AppStorage("isPro") private var isPro = false
+    @Environment(\.dismiss) var dismiss
+    
+    var body: some View {
+        ZStack {
+            currentTheme.bg.ignoresSafeArea()
+            
+            ScrollView {
+                VStack(spacing: 40) {
+                    // Header
+                    VStack(spacing: 12) {
+                        Image(systemName: "crown.fill")
+                            .font(.system(size: 60))
+                            .foregroundStyle(currentTheme.accent)
+                            .shadow(color: currentTheme.accent.opacity(0.3), radius: 10)
+                        
+                        Text("HAIKU PRO")
+                            .font(.system(size: 32, weight: .bold, design: .serif))
+                            .foregroundStyle(currentTheme.accent)
+                            .tracking(8)
+                        
+                        Text("Elevate your focus.")
+                            .font(.system(size: 18, weight: .light, design: .serif))
+                            .foregroundStyle(currentTheme.textForeground.opacity(0.8))
+                    }
+                    .padding(.top, 60)
+                    
+                    // Features
+                    VStack(alignment: .leading, spacing: 24) {
+                        ProFeatureRow(icon: "chart.bar.fill", title: "Advanced Analytics", description: "Deep dive into how you spend your time with category breakdowns.")
+                        ProFeatureRow(icon: "bell.badge.fill", title: "Custom Notifications", description: "Set unlimited custom reminder offsets for your tasks.")
+                        ProFeatureRow(icon: "calendar.badge.plus", title: "Multi-Calendar Sync", description: "Connect all your Google, iCloud, and Outlook calendars.")
+                        ProFeatureRow(icon: "sparkles", title: "Future Updates", description: "Get early access to all new premium features.")
+                    }
+                    .padding(.horizontal, 40)
+                    
+                    // Pricing Tiers
+                    VStack(spacing: 16) {
+                        PricingButton(title: "Monthly", price: "$3.99", subtitle: "Flexible focus", theme: currentTheme) {
+                            unlockPro()
+                        }
+                        
+                        PricingButton(title: "Yearly", price: "$19.99", subtitle: "Best value • $1.66/mo", theme: currentTheme) {
+                            unlockPro()
+                        }
+                        .overlay(
+                            Text("POPULAR")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(currentTheme.bg)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(currentTheme.accent)
+                                .clipShape(Capsule())
+                                .offset(y: -48),
+                            alignment: .top
+                        )
+                        
+                        PricingButton(title: "Lifetime", price: "$49.99", subtitle: "One-time purchase", theme: currentTheme) {
+                            unlockPro()
+                        }
+                    }
+                    .padding(.horizontal, 40)
+                    .padding(.top, 20)
+                    
+                    Button(action: { dismiss() }) {
+                        Text("Maybe Later")
+                            .font(.system(size: 14, design: .serif))
+                            .foregroundStyle(currentTheme.textForeground.opacity(0.5))
+                    }
+                    .padding(.bottom, 60)
+                }
+            }
+            
+            // Close Button
+            VStack {
+                HStack {
+                    Spacer()
+                    Button(action: { dismiss() }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 30))
+                            .foregroundStyle(currentTheme.textForeground.opacity(0.2))
+                    }
+                    .padding(20)
+                }
+                Spacer()
+            }
+        }
+    }
+    
+    private func unlockPro() {
+        withAnimation {
+            isPro = true
+            dismiss()
+        }
+    }
+}
+
+struct ProFeatureRow: View {
+    @AppStorage("appTheme") private var currentTheme: AppTheme = .sage
+    let icon: String
+    let title: String
+    let description: String
+    
+    var body: some View {
+        HStack(spacing: 20) {
+            ZStack {
+                Circle()
+                    .fill(currentTheme.fieldBg)
+                    .frame(width: 44, height: 44)
+                Image(systemName: icon)
+                    .foregroundStyle(currentTheme.accent)
+            }
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 16, weight: .semibold, design: .serif))
+                    .foregroundStyle(currentTheme.textForeground)
+                Text(description)
+                    .font(.system(size: 13))
+                    .foregroundStyle(currentTheme.textForeground.opacity(0.6))
+                    .lineLimit(2)
+            }
+        }
+    }
+}
+
+struct PricingButton: View {
+    let title: String
+    let price: String
+    let subtitle: String
+    let theme: AppTheme
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.system(size: 18, weight: .bold, design: .serif))
+                        .foregroundStyle(theme.textForeground)
+                    Text(subtitle)
+                        .font(.system(size: 12))
+                        .foregroundStyle(theme.textForeground.opacity(0.6))
+                }
+                
+                Spacer()
+                
+                Text(price)
+                    .font(.system(size: 20, weight: .bold, design: .serif))
+                    .foregroundStyle(theme.accent)
+            }
+            .padding(20)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(theme.fieldBg)
+                    .shadow(color: theme.shadowDark, radius: 5, x: 2, y: 2)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+}
