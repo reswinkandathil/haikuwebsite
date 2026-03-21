@@ -56,6 +56,7 @@ struct OnboardingView: View {
                 VStack(spacing: 20) {
                     if currentPage == 3 {
                         Button(action: {
+                            NotificationManager.shared.requestAuthorization()
                             withAnimation(.spring()) {
                                 hasCompletedOnboarding = true
                             }
