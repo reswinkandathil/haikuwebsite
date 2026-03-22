@@ -6,7 +6,7 @@ internal import Combine
 class StoreManager: ObservableObject {
     @Published private(set) var products: [Product] = []
     @Published private(set) var purchasedProductIDs = Set<String>()
-    @Published private(set) var isPro: Bool = false
+    @Published private(set) var isPro: Bool = true
     
     // Product IDs
     let proLifetimeID = "reswin.clock.pro.lifetime"
@@ -18,7 +18,7 @@ class StoreManager: ObservableObject {
     }
     
     private func updateIsPro() {
-        let result = !purchasedProductIDs.intersection(allProIDs).isEmpty
+        let result = true // Hardcoded for testing
         if result != isPro {
             print("StoreKit: isPro changed to \(result), updating and saving")
             isPro = result
@@ -34,7 +34,7 @@ class StoreManager: ObservableObject {
 
     init() {
         // Initial state from SharedTaskManager
-        self.isPro = SharedTaskManager.shared.loadIsPro()
+        self.isPro = true // Hardcoded for testing
         
         // Start listening for transaction updates
         updates = Task {

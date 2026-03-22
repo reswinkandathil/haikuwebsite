@@ -6,6 +6,7 @@ struct ClockView: View {
     @Binding var isFlowState: Bool
     var is24HourClock: Bool = false
     var theme: AppTheme = .sage
+    var onTaskUpdated: ((ClockTask) -> Void)? = nil
 
     // Themed Palette
     private var clockFaceColor: Color { theme.bg }
@@ -62,6 +63,9 @@ struct ClockView: View {
                                 handleDragChange(location: value.location, size: proxy.size)
                             }
                             .onEnded { _ in
+                                if let drag = activeDrag, let task = tasks.first(where: { $0.id == drag.taskId }) {
+                                    onTaskUpdated?(task)
+                                }
                                 activeDrag = nil
                                 tasks.sort { $0.startMinutes < $1.startMinutes }
                                 UIImpactFeedbackGenerator(style: .rigid).impactOccurred()

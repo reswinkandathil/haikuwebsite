@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		480390042F7078D900143322 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 55807460388D95E26153B0D9 /* GoogleSignIn */; };
 		48AA4D822F69E2290088657A /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 48AA4D812F69E2280088657A /* WidgetKit.framework */; };
 		48AA4D842F69E2290088657A /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 48AA4D832F69E2290088657A /* SwiftUI.framework */; };
 		48AA4D932F69E22B0088657A /* clockWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 48AA4D7F2F69E2280088657A /* clockWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -63,6 +64,13 @@
 			);
 			target = 48AA4D7E2F69E2280088657A /* clockWidgetExtension */;
 		};
+		E4F75826323D0B23AFA1E6B1 /* Exceptions for "clock" folder in "clock" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 486924912F5CABE3000B0E65 /* clock */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -70,6 +78,7 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				48AA4D9A2F69E2550088657A /* Exceptions for "clock" folder in "clockWidgetExtension" target */,
+				E4F75826323D0B23AFA1E6B1 /* Exceptions for "clock" folder in "clock" target */,
 			);
 			path = clock;
 			sourceTree = "<group>";
@@ -89,6 +98,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				480390042F7078D900143322 /* GoogleSignIn in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -155,6 +165,7 @@
 			);
 			name = clock;
 			packageProductDependencies = (
+				55807460388D95E26153B0D9 /* GoogleSignIn */,
 			);
 			productName = clock;
 			productReference = 486924922F5CABE3000B0E65 /* clock.app */;
@@ -176,8 +187,6 @@
 				48AA4D852F69E2290088657A /* clockWidget */,
 			);
 			name = clockWidgetExtension;
-			packageProductDependencies = (
-			);
 			productName = clockWidgetExtension;
 			productReference = 48AA4D7F2F69E2280088657A /* clockWidgetExtension.appex */;
 			productType = "com.apple.product-type.app-extension";
@@ -210,6 +219,9 @@
 			);
 			mainGroup = 486924892F5CABE3000B0E65;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				E25D362EB56B8A84D486B329 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 486924932F5CABE3000B0E65 /* Products */;
 			projectDirPath = "";
@@ -396,6 +408,7 @@
 				DEVELOPMENT_TEAM = L8UXLKRL78;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = clock/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Haiku;
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Haiku needs access to your calendar to sync your meetings.";
 				INFOPLIST_KEY_NSCalendarsUsageDescription = "Haiku needs access to your calendar to sync your meetings.";
@@ -432,6 +445,7 @@
 				DEVELOPMENT_TEAM = L8UXLKRL78;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = clock/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Haiku;
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Haiku needs access to your calendar to sync your meetings.";
 				INFOPLIST_KEY_NSCalendarsUsageDescription = "Haiku needs access to your calendar to sync your meetings.";
@@ -550,6 +564,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		E25D362EB56B8A84D486B329 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/google/GoogleSignIn-iOS.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 7.1.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		55807460388D95E26153B0D9 /* GoogleSignIn */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E25D362EB56B8A84D486B329 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignIn;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 4869248A2F5CABE3000B0E65 /* Project object */;
 }

@@ -4,9 +4,26 @@ import SwiftUI
 internal import Combine
 
 class CalendarManager: ObservableObject {
+    @Published var eventsDidChange: Bool = false
+
     private lazy var eventStore: EKEventStore = {
         return EKEventStore()
     }()
+
+    init() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(storeChanged(_:)),
+            name: .EKEventStoreChanged,
+            object: nil
+        )
+    }
+
+    @objc private func storeChanged(_ notification: Notification) {
+        DispatchQueue.main.async {
+            self.eventsDidChange.toggle()
+        }
+    }
 
     func requestAccess(completion: @escaping (Bool) -> Void) {
         if ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1" {
@@ -49,7 +66,16 @@ class CalendarManager: ObservableObject {
             let eComps = cal.dateComponents([.hour, .minute], from: event.endDate)
             
             let sMin = (sComps.hour ?? 0) * 60 + (sComps.minute ?? 0)
-            let eMin = (eComps.hour ?? 0) * 60 + (eComps.minute ?? 0)
+            var eMin = (eComps.hour ?? 0) * 60 + (eComps.minute ?? 0)
+            
+            let days = cal.dateComponents([.day], from: cal.startOfDay(for: event.startDate), to: cal.startOfDay(for: event.endDate)).day ?? 0
+            if days > 0 {
+                eMin += days * 1440
+            }
+            
+            if eMin <= sMin {
+                eMin = sMin + 60 // fallback fallback
+            }
             
             let color = aestheticColors[index % aestheticColors.count].color
             
@@ -80,8 +106,14 @@ class CalendarManager: ObservableObject {
     func saveTask(_ task: ClockTask, date: Date) -> String? {
         let event = EKEvent(eventStore: eventStore)
         event.title = task.title
+        
+        var safeEndMinutes = task.endMinutes
+        if safeEndMinutes <= task.startMinutes {
+            safeEndMinutes += 1440
+        }
+        
         event.startDate = dateFromMinutes(task.startMinutes, on: date)
-        event.endDate = dateFromMinutes(task.endMinutes, on: date)
+        event.endDate = dateFromMinutes(safeEndMinutes, on: date)
         event.calendar = eventStore.defaultCalendarForNewEvents
         
         do {
@@ -98,8 +130,14 @@ class CalendarManager: ObservableObject {
               let event = eventStore.event(withIdentifier: externalId) else { return }
         
         event.title = task.title
+        
+        var safeEndMinutes = task.endMinutes
+        if safeEndMinutes <= task.startMinutes {
+            safeEndMinutes += 1440
+        }
+        
         event.startDate = dateFromMinutes(task.startMinutes, on: date)
-        event.endDate = dateFromMinutes(task.endMinutes, on: date)
+        event.endDate = dateFromMinutes(safeEndMinutes, on: date)
         
         do {
             try eventStore.save(event, span: .thisEvent)

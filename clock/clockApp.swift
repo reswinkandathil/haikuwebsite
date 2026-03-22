@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import GoogleSignIn
 
 @main
 struct clockApp: App {
@@ -37,6 +38,9 @@ struct clockApp: App {
                         showingPaywall = true
                     }
                 }
+            }
+            .onOpenURL { url in
+                GIDSignIn.sharedInstance.handle(url)
             }
         }
     }

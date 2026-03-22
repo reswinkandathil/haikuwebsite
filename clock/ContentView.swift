@@ -18,6 +18,7 @@ struct ContentView: View {
 
     @State private var selectedDate = Calendar.current.startOfDay(for: Date())
     @StateObject private var calendarManager = CalendarManager()
+    @State private var saveDebounceTask: Task<Void, Never>? = nil
     
     @State private var isFlowState = false
     
@@ -343,10 +344,16 @@ struct ContentView: View {
         .onChange(of: selectedDate) { newDate in
             syncCalendar(for: newDate)
         }
-        .onChange(of: tasksByDate) { _ in
-            SharedTaskManager.shared.save(tasksByDate: tasksByDate)
-            WidgetCenter.shared.reloadAllTimelines()
-            NotificationManager.shared.scheduleEarlyNotifications(tasksByDate: tasksByDate, offsets: notificationOffsets)
+        .onChange(of: tasksByDate) { newValue in
+            saveDebounceTask?.cancel()
+            saveDebounceTask = Task {
+                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s debounce
+                if !Task.isCancelled {
+                    SharedTaskManager.shared.save(tasksByDate: newValue)
+                    WidgetCenter.shared.reloadAllTimelines()
+                    NotificationManager.shared.scheduleEarlyNotifications(tasksByDate: newValue, offsets: notificationOffsets)
+                }
+            }
         }
         .onChange(of: notificationOffsetsData) { _ in
             NotificationManager.shared.scheduleEarlyNotifications(tasksByDate: tasksByDate, offsets: notificationOffsets)
@@ -359,6 +366,12 @@ struct ContentView: View {
             SharedTaskManager.shared.save(theme: newValue)
             WidgetCenter.shared.reloadAllTimelines()
         }
+        .onChange(of: calendarManager.eventsDidChange) { _ in
+            syncCalendar(for: selectedDate)
+        }
+        .onChange(of: GoogleCalendarManager.shared.eventsDidChange) { _ in
+            syncCalendar(for: selectedDate)
+        }
     }
 
     private func syncCalendar(for date: Date) {
@@ -366,40 +379,56 @@ struct ContentView: View {
         if isPro {
             calendarManager.requestAccess { granted in
                 if granted {
-                    let fetched = calendarManager.fetchEvents(for: date, theme: currentTheme)
-                    
-                    DispatchQueue.main.async {
-                        var current = tasksByDate[date, default: []]
-                        
-                        for fetchedTask in fetched {
-                            if let index = current.firstIndex(where: { $0.externalEventId == fetchedTask.externalEventId }) {
-                                // Update existing task if properties changed
-                                if current[index].title != fetchedTask.title ||
-                                   current[index].startMinutes != fetchedTask.startMinutes ||
-                                   current[index].endMinutes != fetchedTask.endMinutes {
-                                    current[index].title = fetchedTask.title
-                                    current[index].startMinutes = fetchedTask.startMinutes
-                                    current[index].endMinutes = fetchedTask.endMinutes
+                    let appleFetched = calendarManager.fetchEvents(for: date, theme: currentTheme)
+
+                    func processFetchedEvents(_ fetched: [ClockTask]) {
+                        DispatchQueue.main.async {
+                            var current = self.tasksByDate[date, default: []]
+
+                            for fetchedTask in fetched {
+                                if let index = current.firstIndex(where: { $0.externalEventId == fetchedTask.externalEventId }) {
+                                    // Update existing task if properties changed
+                                    if current[index].title != fetchedTask.title ||
+                                       current[index].startMinutes != fetchedTask.startMinutes ||
+                                       current[index].endMinutes != fetchedTask.endMinutes {
+                                        current[index].title = fetchedTask.title
+                                        current[index].startMinutes = fetchedTask.startMinutes
+                                        current[index].endMinutes = fetchedTask.endMinutes
+                                    }
+                                } else {
+                                    // Add new task from external calendar
+                                    current.append(fetchedTask)
                                 }
-                            } else {
-                                // Add new task from external calendar
-                                current.append(fetchedTask)
                             }
+
+                            // Remove tasks that no longer exist in external calendars but have an external ID
+                            let fetchedIds = Set(fetched.compactMap { $0.externalEventId })
+                            current.removeAll { task in
+                                if let extId = task.externalEventId {
+                                    // Only remove if it belongs to the calendar we just fetched
+                                    // e.g. if we fetched Google, only remove missing Google events
+                                    if extId.hasPrefix("google_") {
+                                        return fetched.first(where: { $0.externalEventId?.hasPrefix("google_") == true }) != nil && !fetchedIds.contains(extId)
+                                    } else {
+                                        return fetched.first(where: { $0.externalEventId?.hasPrefix("google_") == false }) != nil && !fetchedIds.contains(extId)
+                                    }
+                                }
+                                return false
+                            }
+
+                            current.sort { $0.startMinutes < $1.startMinutes }
+                            self.tasksByDate[date] = current
                         }
-                        
-                        // Remove tasks that no longer exist in Apple Calendar but have an external ID
-                        current.removeAll { task in
-                            task.externalEventId != nil && !fetched.contains(where: { $0.externalEventId == task.externalEventId })
-                        }
-                        
-                        current.sort { $0.startMinutes < $1.startMinutes }
-                        tasksByDate[date] = current
+                    }
+
+                    GoogleCalendarManager.shared.fetchEvents(for: date, theme: currentTheme) { googleFetched in
+                        let combined = appleFetched + googleFetched
+                        processFetchedEvents(combined)
                     }
                 }
             }
         }
     }
-
     @ViewBuilder
     private func clockContentView() -> some View {
         VStack(spacing: 0) {
@@ -407,7 +436,23 @@ struct ContentView: View {
                 .frame(height: 20)
                 
             // Clock
-            ClockView(now: now, tasks: currentTasksBinding, isFlowState: $isFlowState, is24HourClock: is24HourClock, theme: currentTheme)
+            ClockView(
+                now: now,
+                tasks: currentTasksBinding,
+                isFlowState: $isFlowState,
+                is24HourClock: is24HourClock,
+                theme: currentTheme,
+                onTaskUpdated: { updatedTask in
+                    if isPro {
+                        let day = Calendar.current.startOfDay(for: selectedDate)
+                        if let extId = updatedTask.externalEventId, extId.hasPrefix("google_") {
+                            GoogleCalendarManager.shared.updateTask(updatedTask, date: day)
+                        } else {
+                            calendarManager.updateTask(updatedTask, date: day)
+                        }
+                    }
+                }
+            )
                 .frame(width: 280, height: 280)
                 .scaleEffect(isFlowState ? 1.15 : 1.0)
                 
@@ -456,7 +501,11 @@ struct ContentView: View {
                                 Button(role: .destructive) {
                                     if let index = tasksByDate[selectedDate]?.firstIndex(where: { $0.id == task.id }) {
                                         if isPro, let extId = task.externalEventId {
-                                            calendarManager.deleteTask(externalId: extId)
+                                            if extId.hasPrefix("google_") {
+                                                GoogleCalendarManager.shared.deleteTask(externalId: extId)
+                                            } else {
+                                                calendarManager.deleteTask(externalId: extId)
+                                            }
                                         }
                                         withAnimation {
                                             tasksByDate[selectedDate]?.remove(at: index)
@@ -868,7 +917,7 @@ struct AddTaskView: View {
         
         let day = cal.startOfDay(for: taskDate)
         
-        @AppStorage("isPro") var isPro = false
+        let isPro = true // Hardcoded for testing
         
         if let toEdit = taskToEdit {
             // Remove old version if date changed
@@ -882,10 +931,14 @@ struct AddTaskView: View {
             updatedTask.endMinutes = eMin
             updatedTask.color = colorToUse
             
-            // Sync update to Apple Calendar if Pro
+            // Sync update to Apple Calendar or Google Calendar if Pro
             if isPro {
-                if updatedTask.externalEventId != nil {
-                    calendarManager.updateTask(updatedTask, date: day)
+                if let extId = updatedTask.externalEventId {
+                    if extId.hasPrefix("google_") {
+                        GoogleCalendarManager.shared.updateTask(updatedTask, date: day)
+                    } else {
+                        calendarManager.updateTask(updatedTask, date: day)
+                    }
                 } else if let extId = calendarManager.saveTask(updatedTask, date: day) {
                     updatedTask.externalEventId = extId
                 }
@@ -1730,6 +1783,7 @@ struct ProfileSettingsView: View {
     @AppStorage("notificationOffsetsData") private var notificationOffsetsData = ""
     @EnvironmentObject var storeManager: StoreManager
     private var isPro: Bool { storeManager.isPro }
+    @ObservedObject var googleCalendarManager = GoogleCalendarManager.shared
     
     @Binding var is24HourClock: Bool
     @Binding var showingCustomOffsetAlert: Bool
@@ -1948,7 +2002,44 @@ struct ProfileSettingsView: View {
                                 )
                             }
                             .buttonStyle(.plain)
-                            
+
+                            // Google Calendar Block
+                            Button(action: {
+                                if isPro {
+                                    if googleCalendarManager.isSignedIn {
+                                        googleCalendarManager.signOut()
+                                    } else {
+                                        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                                           let rootVC = windowScene.windows.first?.rootViewController {
+                                            googleCalendarManager.signIn(presenting: rootVC)
+                                        }
+                                    }
+                                } else {
+                                    showingPaywall = true
+                                }
+                            }) {
+                                HStack(spacing: 12) {
+                                    Image(systemName: isPro ? "g.circle.fill" : "lock.fill")
+                                        .foregroundStyle(googleCalendarManager.isSignedIn ? Color.red : goldColor)
+                                    Text(googleCalendarManager.isSignedIn ? "Sign Out of Google" : "Sign In with Google")
+                                        .font(.system(size: 16, weight: .medium))
+                                        .foregroundStyle(currentTheme.textForeground.opacity(0.9))
+                                    Spacer()
+                                    if googleCalendarManager.isSignedIn {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundStyle(Color.green)
+                                    }
+                                }
+                                .padding()
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(currentTheme.fieldBg)
+                                        .shadow(color: currentTheme.shadowDark, radius: 5, x: 4, y: 4)
+                                        .shadow(color: currentTheme.shadowLight, radius: 5, x: -4, y: -4)
+                                )
+                            }
+                            .buttonStyle(.plain)
+
                             Text("Connect Google, Microsoft, or iCloud.")
                                 .font(.system(size: 11, weight: .regular))
                                 .foregroundStyle(currentTheme.textForeground.opacity(0.6))
@@ -1957,7 +2048,6 @@ struct ProfileSettingsView: View {
                         }
                         .opacity(isPro ? 1.0 : 0.6)
                     }
-
                     // Legal Section
                     VStack(alignment: .leading, spacing: 12) {
                         Text("LEGAL")

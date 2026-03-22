@@ -99,7 +99,7 @@ class SharedTaskManager {
     }
 
     func loadIsPro() -> Bool {
-        return userDefaults.bool(forKey: isProKey)
+        return true // Hardcoded for testing
     }
 
     func save(tasksByDate: [Date: [ClockTask]]) {        let groups = tasksByDate.map { TaskGroup(date: $0.key, tasks: $0.value) }
