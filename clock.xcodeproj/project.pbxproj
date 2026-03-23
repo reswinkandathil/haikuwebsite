@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		480390042F7078D900143322 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 55807460388D95E26153B0D9 /* GoogleSignIn */; };
+		484C12BE2F71E7E1001F962B /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = 484C12BD2F71E7E1001F962B /* RevenueCat */; };
+		484C12C02F71E7E5001F962B /* RevenueCatUI in Frameworks */ = {isa = PBXBuildFile; productRef = 484C12BF2F71E7E5001F962B /* RevenueCatUI */; };
 		48AA4D822F69E2290088657A /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 48AA4D812F69E2280088657A /* WidgetKit.framework */; };
 		48AA4D842F69E2290088657A /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 48AA4D832F69E2290088657A /* SwiftUI.framework */; };
 		48AA4D932F69E22B0088657A /* clockWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 48AA4D7F2F69E2280088657A /* clockWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -38,7 +40,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		486924922F5CABE3000B0E65 /* clock.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = clock.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		486924922F5CABE3000B0E65 /* Haiku.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Haiku.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		48AA4D7F2F69E2280088657A /* clockWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = clockWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		48AA4D812F69E2280088657A /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		48AA4D832F69E2290088657A /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
@@ -98,7 +100,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				484C12BE2F71E7E1001F962B /* RevenueCat in Frameworks */,
 				480390042F7078D900143322 /* GoogleSignIn in Frameworks */,
+				484C12C02F71E7E5001F962B /* RevenueCatUI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -128,7 +132,7 @@
 		486924932F5CABE3000B0E65 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				486924922F5CABE3000B0E65 /* clock.app */,
+				486924922F5CABE3000B0E65 /* Haiku.app */,
 				48AA4D7F2F69E2280088657A /* clockWidgetExtension.appex */,
 			);
 			name = Products;
@@ -166,9 +170,11 @@
 			name = clock;
 			packageProductDependencies = (
 				55807460388D95E26153B0D9 /* GoogleSignIn */,
+				484C12BD2F71E7E1001F962B /* RevenueCat */,
+				484C12BF2F71E7E5001F962B /* RevenueCatUI */,
 			);
 			productName = clock;
-			productReference = 486924922F5CABE3000B0E65 /* clock.app */;
+			productReference = 486924922F5CABE3000B0E65 /* Haiku.app */;
 			productType = "com.apple.product-type.application";
 		};
 		48AA4D7E2F69E2280088657A /* clockWidgetExtension */ = {
@@ -221,6 +227,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				E25D362EB56B8A84D486B329 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
+				484C12BC2F71B1D4001F962B /* XCRemoteSwiftPackageReference "purchases-ios-spm" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 486924932F5CABE3000B0E65 /* Products */;
@@ -566,6 +573,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		484C12BC2F71B1D4001F962B /* XCRemoteSwiftPackageReference "purchases-ios-spm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/RevenueCat/purchases-ios-spm.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.66.0;
+			};
+		};
 		E25D362EB56B8A84D486B329 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/google/GoogleSignIn-iOS.git";
@@ -577,6 +592,16 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		484C12BD2F71E7E1001F962B /* RevenueCat */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 484C12BC2F71B1D4001F962B /* XCRemoteSwiftPackageReference "purchases-ios-spm" */;
+			productName = RevenueCat;
+		};
+		484C12BF2F71E7E5001F962B /* RevenueCatUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 484C12BC2F71B1D4001F962B /* XCRemoteSwiftPackageReference "purchases-ios-spm" */;
+			productName = RevenueCatUI;
+		};
 		55807460388D95E26153B0D9 /* GoogleSignIn */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = E25D362EB56B8A84D486B329 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;

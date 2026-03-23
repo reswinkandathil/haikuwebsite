@@ -1,5 +1,4 @@
 import SwiftUI
-import StoreKit
 
 struct ProfileAnalyticsView: View {
     @AppStorage("appTheme") private var currentTheme: AppTheme = .sage

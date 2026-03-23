@@ -1,11 +1,13 @@
 import SwiftUI
-import StoreKit
+import RevenueCat
+import RevenueCatUI
 
 struct HaikuProView: View {
     @AppStorage("appTheme") private var currentTheme: AppTheme = .sage
     @EnvironmentObject var storeManager: StoreManager
     @Environment(\.dismiss) var dismiss
     @State private var isPurchasing = false
+    @State private var showingCustomerCenter = false
     
     var body: some View {
         ZStack {
@@ -41,14 +43,14 @@ struct HaikuProView: View {
                     }
                     .padding(.horizontal, 40)
                     
-                    // Pricing Tiers (Dynamic from StoreKit)
+                    // Pricing Tiers (Dynamic from RevenueCat)
                     VStack(spacing: 16) {
-                        if !storeManager.products.isEmpty {
+                        if let currentOffering = storeManager.offerings?.current {
                             // Monthly
-                            if let monthly = storeManager.products.first(where: { $0.id == storeManager.proMonthlyID }) {
+                            if let monthly = currentOffering.monthly {
                                 PricingButton(
                                     title: "Monthly",
-                                    price: monthly.displayPrice,
+                                    price: monthly.localizedPriceString,
                                     subtitle: "Full access, billed monthly.",
                                     theme: currentTheme
                                 ) {
@@ -58,10 +60,10 @@ struct HaikuProView: View {
                             }
                             
                             // Annual
-                            if let annual = storeManager.products.first(where: { $0.id == storeManager.proAnnualID }) {
+                            if let annual = currentOffering.annual {
                                 PricingButton(
                                     title: "Annual",
-                                    price: annual.displayPrice,
+                                    price: annual.localizedPriceString,
                                     subtitle: "Save with yearly billing.",
                                     theme: currentTheme
                                 ) {
@@ -71,38 +73,45 @@ struct HaikuProView: View {
                             }
                             
                             // Lifetime
-                            if let lifetime = storeManager.products.first(where: { $0.id == storeManager.proLifetimeID }) {
+                            if let lifetime = currentOffering.lifetime {
                                 PricingButton(
                                     title: "Lifetime",
-                                    price: lifetime.displayPrice,
+                                    price: lifetime.localizedPriceString,
                                     subtitle: "One-time payment forever.",
                                     theme: currentTheme
                                 ) {
                                     buyPro(lifetime)
                                 }
                                 .disabled(isPurchasing)
-                            }
-                        } else {
-                            // Fallback if products haven't loaded yet
+                                }
+                                } else {
+                                // Fallback if offerings haven't loaded yet
+
                             ProgressView()
                                 .tint(currentTheme.accent)
                                 .onAppear {
-                                    print("HaikuProView: Products empty, calling refresh...")
-                                    Task { await storeManager.refresh() }
+                                    storeManager.refreshOfferings()
                                 }
                         }
                         
-                        Button(action: {
-                            Task {
-                                await storeManager.restore()
-                                if storeManager.isPro {
-                                    dismiss()
+                        HStack(spacing: 20) {
+                            Button(action: {
+                                Task {
+                                    await storeManager.restore()
+                                }
+                            }) {
+                                Text("Restore Purchases")
+                                    .font(.system(size: 12, weight: .medium, design: .serif))
+                                    .foregroundStyle(currentTheme.accent.opacity(0.8))
+                            }
+                            
+                            if storeManager.isPro {
+                                Button(action: { showingCustomerCenter = true }) {
+                                    Text("Manage Subscription")
+                                        .font(.system(size: 12, weight: .medium, design: .serif))
+                                        .foregroundStyle(currentTheme.accent.opacity(0.8))
                                 }
                             }
-                        }) {
-                            Text("Restore Purchases")
-                                .font(.system(size: 12, weight: .medium, design: .serif))
-                                .foregroundStyle(currentTheme.accent.opacity(0.8))
                         }
                         .padding(.top, 8)
                     }
@@ -121,7 +130,7 @@ struct HaikuProView: View {
                 if isPurchasing {
                     ZStack {
                         Color.black.opacity(0.3).ignoresSafeArea()
-                        ProgressView("Contacting App Store...")
+                        ProgressView("Processing...")
                             .padding()
                             .background(RoundedRectangle(cornerRadius: 12).fill(currentTheme.fieldBg))
                     }
@@ -142,16 +151,20 @@ struct HaikuProView: View {
                 Spacer()
             }
         }
+        .sheet(isPresented: $showingCustomerCenter) {
+            CustomerCenterView()
+        }
         .onChange(of: storeManager.isPro) { newValue in
             if newValue { dismiss() }
         }
+
     }
     
-    private func buyPro(_ product: Product) {
+    private func buyPro(_ package: Package) {
         isPurchasing = true
         Task {
             do {
-                try await storeManager.purchase(product: product)
+                try await storeManager.purchase(package: package)
             } catch {
                 print("Purchase failed: \(error)")
             }
@@ -224,4 +237,3 @@ struct PricingButton: View {
         .buttonStyle(.plain)
     }
 }
-

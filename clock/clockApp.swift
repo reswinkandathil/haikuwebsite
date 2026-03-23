@@ -7,12 +7,20 @@
 
 import SwiftUI
 import GoogleSignIn
+import RevenueCat
+import RevenueCatUI
 
 @main
 struct clockApp: App {
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @StateObject private var storeManager = StoreManager()
     @State private var showingPaywall = false
+    
+    init() {
+        // Initialize RevenueCat
+        Purchases.logLevel = .debug
+        Purchases.configure(withAPIKey: "test_BnEWCtQiNhXXQxCUtUuJfKUDncB")
+    }
     
     var body: some Scene {
         WindowGroup {
@@ -28,17 +36,6 @@ struct clockApp: App {
                 }
             }
             .environmentObject(storeManager)
-            .task {
-                await storeManager.refresh()
-            }
-            .onChange(of: hasCompletedOnboarding) { newValue in
-                if newValue {
-                    // Show paywall 1.5s after onboarding completes
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                        showingPaywall = true
-                    }
-                }
-            }
             .onOpenURL { url in
                 GIDSignIn.sharedInstance.handle(url)
             }

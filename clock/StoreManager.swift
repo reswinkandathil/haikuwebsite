@@ -1,152 +1,83 @@
 import Foundation
+import RevenueCat
 import StoreKit
+import SwiftUI
 internal import Combine
 
 @MainActor
 class StoreManager: ObservableObject {
-    @Published private(set) var products: [Product] = []
-    @Published private(set) var purchasedProductIDs = Set<String>()
-    @Published private(set) var isPro: Bool = true
+    @Published private(set) var offerings: Offerings?
+    @Published private(set) var isPro: Bool = false
+    @Published private(set) var customerInfo: CustomerInfo?
     
-    // Product IDs
-    let proLifetimeID = "reswin.clock.pro.lifetime"
-    let proMonthlyID = "reswin.clock.pro.monthly"
-    let proAnnualID = "reswin.clock.pro.annual"
+    private let proEntitlementID = "Haiku  Pro"
+    private var customerInfoTask: Task<Void, Never>?
     
-    var allProIDs: Set<String> {
-        [proLifetimeID, proMonthlyID, proAnnualID]
-    }
-    
-    private func updateIsPro() {
-        let result = true // Hardcoded for testing
-        if result != isPro {
-            print("StoreKit: isPro changed to \(result), updating and saving")
-            isPro = result
-            // Save to SharedTaskManager in background so it doesn't block the actor
-            Task.detached {
-                SharedTaskManager.shared.save(isPro: result)
-            }
-        }
-    }
-    
-    private var updates: Task<Void, Never>? = nil
-    private var refreshTask: Task<Void, Never>? = nil
-
     init() {
-        // Initial state from SharedTaskManager
-        self.isPro = true // Hardcoded for testing
+        // Initialize from local cache first for instant UI response
+        self.isPro = SharedTaskManager.shared.loadIsPro()
         
-        // Start listening for transaction updates
-        updates = Task {
-            for await result in Transaction.updates {
-                await self.handle(transaction: result)
-            }
-        }
-        
+        // Then fetch fresh status from server
         Task {
-            await refresh()
-        }
-    }
-
-    deinit {
-        updates?.cancel()
-        refreshTask?.cancel()
-    }
-
-    func refresh() async {
-        // Prevent multiple simultaneous refreshes
-        if let existingTask = refreshTask {
-            await existingTask.value
-            return
+            if let info = try? await Purchases.shared.customerInfo() {
+                self.updateProStatus(info)
+            }
         }
         
-        let task = Task {
-            // Small delay to allow StoreKit 2 to settle its connection to the local .storekit file
-            try? await Task.sleep(nanoseconds: 200_000_000) // 0.2 seconds
-            
-            let bundleID = Bundle.main.bundleIdentifier ?? "unknown"
-            print("StoreKit: Starting refresh for Bundle ID: \(bundleID)")
-            
-            // Debug check for the file in bundle
-            if let path = Bundle.main.path(forResource: "Products", ofType: "storekit") {
-                print("StoreKit: Products.storekit FOUND in bundle at: \(path)")
-            } else {
-                print("StoreKit: Products.storekit NOT found in main bundle (This is normal if only using Scheme configuration)")
-            }
-
-            print("StoreKit: Looking for Product IDs: \(allProIDs)")
+        // Start listening to customer info updates
+        subscribeToCustomerInfo()
+        
+        // Initial fetch of offerings
+        refreshOfferings()
+    }
+    
+    func refreshOfferings() {
+        Task {
             do {
-                // 1. Fetch products from Apple (or local storekit file)
-                print("StoreKit: Calling Product.products(for:)...")
-                let fetchedProducts = try await Product.products(for: Array(allProIDs))
-                print("StoreKit: Successfully fetched \(fetchedProducts.count) products")
-                
-                if fetchedProducts.isEmpty {
-                    print("StoreKit: WARNING: No products were found. Check your StoreKit configuration and product IDs.")
-                    print("StoreKit: Troubleshooting Tips:")
-                    print("  1. Ensure the StoreKit configuration is selected in your scheme editor.")
-                    print("  2. Ensure the product IDs in the StoreKit file match exactly.")
-                    print("  3. Ensure the StoreKit file is added to the app target's bundle.")
-                }
-                
-                for product in fetchedProducts {
-                    print("StoreKit: Found product - \(product.id) [\(product.displayPrice)]")
-                }
-                
-                self.products = fetchedProducts
-                
-                // 2. Check current entitlements
-                print("StoreKit: Checking current entitlements...")
-                for await result in Transaction.currentEntitlements {
-                    await self.handle(transaction: result)
-                }
-                updateIsPro()
-                print("StoreKit: Refresh complete. isPro: \(isPro)")
+                self.offerings = try await Purchases.shared.offerings()
             } catch {
-                print("StoreKit: CRITICAL ERROR fetching products: \(error)")
-                print("StoreKit: Error details: \(error.localizedDescription)")
+                print("RevenueCat: Failed to fetch offerings: \(error)")
             }
         }
-        
-        refreshTask = task
-        await task.value
-        refreshTask = nil
     }
-
-    func purchase(product: Product) async throws {
-        let result = try await product.purchase()
-        
-        switch result {
-        case .success(let verification):
-            await handle(transaction: verification)
-        case .userCancelled, .pending:
-            break
-        @unknown default:
-            break
+    
+    private func subscribeToCustomerInfo() {
+        // The modern way to handle state changes in RevenueCat SDK
+        customerInfoTask = Task {
+            for await info in Purchases.shared.customerInfoStream {
+                self.customerInfo = info
+                self.updateProStatus(info)
+            }
         }
     }
-
+    
+    func updateProStatus(_ info: CustomerInfo) {
+        let proActive = info.entitlements[proEntitlementID]?.isActive == true
+        print("RevenueCat: Checking entitlement '\(proEntitlementID)'. Active: \(proActive)")
+        print("RevenueCat: Current active entitlements: \(info.entitlements.active.keys)")
+        
+        if proActive != self.isPro {
+            print("RevenueCat: Pro status changing from \(self.isPro) to \(proActive)")
+            self.isPro = proActive
+            SharedTaskManager.shared.save(isPro: proActive)
+        }
+    }
+    
+    func purchase(package: Package) async throws {
+        let result = try await Purchases.shared.purchase(package: package)
+        updateProStatus(result.customerInfo)
+    }
+    
     func restore() async {
-        try? await AppStore.sync()
-        await refresh()
-    }
-
-    private func handle(transaction result: VerificationResult<Transaction>) async {
-        switch result {
-        case .verified(let transaction):
-            // Check if it's one of our Pro IDs and if it's still valid (not revoked)
-            if allProIDs.contains(transaction.productID) {
-                if transaction.revocationDate == nil {
-                    self.purchasedProductIDs.insert(transaction.productID)
-                } else {
-                    self.purchasedProductIDs.remove(transaction.productID)
-                }
-            }
-            await transaction.finish()
-            updateIsPro()
-        case .unverified:
-            // Handle unverified transactions (usually ignored in simple apps)
-            break
+        do {
+            let info = try await Purchases.shared.restorePurchases()
+            updateProStatus(info)
+        } catch {
+            print("RevenueCat: Restore failed: \(error)")
         }
+    }
+    
+    deinit {
+        customerInfoTask?.cancel()
     }
 }

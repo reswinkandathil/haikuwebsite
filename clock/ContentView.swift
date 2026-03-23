@@ -1,7 +1,6 @@
 import SwiftUI
 internal import Combine
 import WidgetKit
-import StoreKit
 
 struct ContentView: View {
     @AppStorage("appTheme") private var currentTheme: AppTheme = .sage

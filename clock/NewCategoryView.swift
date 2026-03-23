@@ -1,5 +1,4 @@
 import SwiftUI
-import StoreKit
 
 struct NewCategoryView: View {
     @Environment(\.dismiss) var dismiss

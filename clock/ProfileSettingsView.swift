@@ -1,5 +1,4 @@
 import SwiftUI
-import StoreKit
 
 struct ProfileSettingsView: View {
     @AppStorage("appTheme") private var currentTheme: AppTheme = .sage
@@ -279,7 +278,7 @@ struct ProfileSettingsView: View {
                             .tracking(1)
                             .padding(.horizontal, 4)
 
-                        Link(destination: URL(string: "https://yourwebsite.com/privacy")!) {
+                        Link(destination: URL(string: "https://haiku-app.github.io/haiku/privacy.html")!) {
                             HStack {
                                 Text("Privacy Policy")
                                     .font(.system(size: 16, weight: .medium, design: .serif))
@@ -308,13 +307,6 @@ struct ProfileSettingsView: View {
                         Text("Version 1.0.0")
                             .font(.system(size: 10, weight: .light))
                             .foregroundStyle(currentTheme.textForeground.opacity(0.4))
-                        
-                        if !isPro {
-                            Text("Note: Use StoreKit for production billing.")
-                                .font(.system(size: 10, weight: .regular, design: .serif))
-                                .foregroundStyle(Color.red.opacity(0.5))
-                                .padding(.top, 4)
-                        }
                     }
                     .padding(.top, 20)
                 }
