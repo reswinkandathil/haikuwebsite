@@ -104,8 +104,8 @@ struct TodoView: View {
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                 Button(role: .destructive) {
                                     if let index = brainDumpManager.tasks.firstIndex(where: { $0.id == task.id }) {
-                                        withAnimation {
-                                            brainDumpManager.tasks.remove(at: index)
+                                        withAnimation(.easeInOut) {
+                                            _ = brainDumpManager.tasks.remove(at: index)
                                         }
                                     }
                                 } label: {
