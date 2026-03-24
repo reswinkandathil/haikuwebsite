@@ -3,6 +3,7 @@ import RevenueCat
 import StoreKit
 import SwiftUI
 internal import Combine
+import PostHog
 
 @MainActor
 class StoreManager: ObservableObject {
@@ -60,6 +61,9 @@ class StoreManager: ObservableObject {
             print("RevenueCat: Pro status changing from \(self.isPro) to \(proActive)")
             self.isPro = proActive
             SharedTaskManager.shared.save(isPro: proActive)
+            if proActive {
+                PostHogSDK.shared.capture("purchase_completed")
+            }
         }
     }
     
@@ -72,6 +76,7 @@ class StoreManager: ObservableObject {
         do {
             let info = try await Purchases.shared.restorePurchases()
             updateProStatus(info)
+            PostHogSDK.shared.capture("purchase_restored")
         } catch {
             print("RevenueCat: Restore failed: \(error)")
         }

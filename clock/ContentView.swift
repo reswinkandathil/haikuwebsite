@@ -1,6 +1,7 @@
 import SwiftUI
 internal import Combine
 import WidgetKit
+import PostHog
 
 struct ContentView: View {
     @AppStorage("appTheme") private var currentTheme: AppTheme = .sage
@@ -590,6 +591,8 @@ struct ContentView: View {
                                                 calendarManager.deleteTask(externalId: extId)
                                             }
                                         }
+                                        // PostHog: Track task deletion
+                                        PostHogSDK.shared.capture("task_deleted")
                                         withAnimation {
                                             tasksByDate[selectedDate]?.remove(at: index)
                                         }

@@ -1,4 +1,5 @@
 import SwiftUI
+import PostHog
 
 struct AddTaskView: View {
     @AppStorage("appTheme") private var currentTheme: AppTheme = .sage
@@ -356,7 +357,12 @@ struct AddTaskView: View {
             }
             dayTasks.sort { $0.startMinutes < $1.startMinutes }
             tasksByDate[day] = dayTasks
-            
+
+            // PostHog: Track task update
+            PostHogSDK.shared.capture("task_updated", properties: [
+                "duration_minutes": updatedTask.endMinutes - updatedTask.startMinutes,
+            ])
+
         } else {
             var newTask = ClockTask(
                 title: title.isEmpty ? "New Task" : title,
@@ -388,7 +394,13 @@ struct AddTaskView: View {
             dayTasks.append(newTask)
             dayTasks.sort { $0.startMinutes < $1.startMinutes }
             tasksByDate[day] = dayTasks
-            
+
+            // PostHog: Track task creation
+            PostHogSDK.shared.capture("task_created", properties: [
+                "duration_minutes": newTask.endMinutes - newTask.startMinutes,
+                "from_brain_dump": brainDumpTaskId != nil,
+            ])
+
             // Update BrainDumpTask if needed
             if let bdtid = brainDumpTaskId {
                 if let index = brainDumpManager.tasks.firstIndex(where: { $0.id == bdtid }) {

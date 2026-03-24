@@ -1,4 +1,5 @@
 import SwiftUI
+import PostHog
 
 struct TodoView: View {
     @AppStorage("appTheme") private var currentTheme: AppTheme = .sage
@@ -125,6 +126,7 @@ struct TodoView: View {
                     Button(action: {
                         if let firstId = selectedTaskIds.first,
                            let task = brainDumpManager.tasks.first(where: { $0.id == firstId }) {
+                            PostHogSDK.shared.capture("brain_dump_task_scheduled")
                             onSchedule(task.title, task.id)
                             withAnimation {
                                 isSelectionMode = false
@@ -185,6 +187,7 @@ struct TodoView: View {
         withAnimation {
             brainDumpManager.tasks.insert(BrainDumpTask(title: newTaskTitle), at: 0)
         }
+        PostHogSDK.shared.capture("brain_dump_task_added")
         newTaskTitle = ""
         isFocused = true
     }

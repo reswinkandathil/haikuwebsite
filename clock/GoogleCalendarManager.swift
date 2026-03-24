@@ -2,6 +2,7 @@ import Foundation
 internal import Combine
 import SwiftUI
 import GoogleSignIn
+import PostHog
 
 // Ensure your GoogleSignIn dependency is available.
 
@@ -41,6 +42,7 @@ class GoogleCalendarManager: ObservableObject {
         
         if hasScope {
             print("Google Sign-In: User is signed in with required scopes.")
+            PostHogSDK.shared.capture("google_calendar_connected")
             self.eventsDidChange.toggle()
         } else {
             print("Google Sign-In: User is signed in but missing calendar scope.")

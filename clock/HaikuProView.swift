@@ -1,6 +1,7 @@
 import SwiftUI
 import RevenueCat
 import RevenueCatUI
+import PostHog
 
 struct HaikuProView: View {
     @AppStorage("appTheme") private var currentTheme: AppTheme = .sage
@@ -12,7 +13,7 @@ struct HaikuProView: View {
     var body: some View {
         ZStack {
             currentTheme.bg.ignoresSafeArea()
-            
+
             ScrollView {
                 VStack(spacing: 40) {
                     // Header
@@ -157,10 +158,19 @@ struct HaikuProView: View {
         .onChange(of: storeManager.isPro) { newValue in
             if newValue { dismiss() }
         }
+        .onAppear {
+            // PostHog: Track paywall view
+            PostHogSDK.shared.capture("paywall_viewed")
+        }
 
     }
-    
+
     private func buyPro(_ package: Package) {
+        // PostHog: Track purchase initiation
+        PostHogSDK.shared.capture("purchase_initiated", properties: [
+            "package_identifier": package.identifier,
+            "price": package.localizedPriceString,
+        ])
         isPurchasing = true
         Task {
             do {
