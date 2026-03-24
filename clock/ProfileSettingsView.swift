@@ -1,5 +1,6 @@
 import SwiftUI
 import PostHog
+import EventKit
 
 struct ProfileSettingsView: View {
     @AppStorage("appTheme") private var currentTheme: AppTheme = .sage
@@ -7,6 +8,8 @@ struct ProfileSettingsView: View {
     @EnvironmentObject var storeManager: StoreManager
     private var isPro: Bool { storeManager.isPro }
     @ObservedObject var googleCalendarManager = GoogleCalendarManager.shared
+    @StateObject private var calendarManager = CalendarManager()
+    @State private var appleCalendarStatus: EKAuthorizationStatus = EKEventStore.authorizationStatus(for: .event)
     
     @Binding var is24HourClock: Bool
     @Binding var showingCustomOffsetAlert: Bool
@@ -201,25 +204,35 @@ struct ProfileSettingsView: View {
                             .padding(.horizontal, 4)
 
                         VStack(spacing: 8) {
+                            // Apple Calendar Block
                             Button(action: {
                                 if isPro {
-                                    if let url = URL(string: "App-Prefs:root=CALENDAR"), UIApplication.shared.canOpenURL(url) {
-                                        UIApplication.shared.open(url)
-                                    } else if let url = URL(string: UIApplication.openSettingsURLString) {
-                                        UIApplication.shared.open(url)
+                                    calendarManager.requestAccess { granted in
+                                        appleCalendarStatus = EKEventStore.authorizationStatus(for: .event)
                                     }
                                 } else {
-                                    PostHogSDK.shared.capture("upgrade_calendar_settings_clicked")
+                                    PostHogSDK.shared.capture("upgrade_apple_calendar_clicked")
                                     showingPaywall = true
                                 }
                             }) {
                                 HStack(spacing: 12) {
-                                    Image(systemName: isPro ? "calendar" : "lock.fill")
+                                    let isAuthorized = appleCalendarStatus == .authorized || ( {
+                                        if #available(iOS 17.0, *) {
+                                            return appleCalendarStatus == .fullAccess
+                                        }
+                                        return false
+                                    }() )
+                                    
+                                    Image(systemName: isPro ? "apple.logo" : "lock.fill")
                                         .foregroundStyle(goldColor)
-                                    Text("Open Calendar Settings")
+                                    Text(isAuthorized ? "Apple Calendar Connected" : "Sync with Apple Calendar")
                                         .font(.system(size: 16, weight: .medium))
                                         .foregroundStyle(currentTheme.textForeground.opacity(0.9))
                                     Spacer()
+                                    if isAuthorized {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundStyle(Color.green)
+                                    }
                                 }
                                 .padding()
                                 .background(
