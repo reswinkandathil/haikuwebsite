@@ -188,7 +188,14 @@ struct clockWidgetEntryView : View {
         // Check if we actually have permission. In widgets, we can't prompt, we just have to check.
         let status = EKEventStore.authorizationStatus(for: .event)
         
-        if status == .authorized || status == .fullAccess {
+        let isAuthorized: Bool
+        if #available(iOS 17.0, *) {
+            isAuthorized = status == .fullAccess || status == .writeOnly
+        } else {
+            isAuthorized = status == .authorized
+        }
+        
+        if isAuthorized {
             return manager.fetchEvents(for: Date(), theme: theme)
         } else {
             // If the main app hasn't gotten permission yet, return nothing.
