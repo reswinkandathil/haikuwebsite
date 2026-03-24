@@ -325,11 +325,11 @@ struct ProfileSettingsView: View {
         .sheet(isPresented: $showingPaywall) {
             HaikuProView()
         }
-        .onChange(of: currentTheme) { newTheme in
+        .onChange(of: currentTheme) { oldTheme, newTheme in
             PostHogSDK.shared.capture("theme_changed", properties: ["theme_name": newTheme.name])
         }
-        .onChange(of: is24HourClock) { newValue in
-            PostHogSDK.shared.capture("clock_format_toggled", properties: ["is_24_hour": newValue])
+        .onChange(of: is24HourClock) { oldVal, newVal in
+            PostHogSDK.shared.capture("clock_format_toggled", properties: ["is_24_hour": newVal])
         }
     }
 }

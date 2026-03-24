@@ -117,8 +117,7 @@ struct ContentView: View {
                 .opacity(selectedTab == .clock && !isFlowState ? 1 : 0)
                 .frame(height: selectedTab == .clock && !isFlowState ? nil : 0)
                 .clipped()
-                .animation(nil, value: selectedTab)
-                .animation(nil, value: isFlowState)
+                .animation(nil)
 
                 Spacer()
 
@@ -354,42 +353,42 @@ struct ContentView: View {
             SharedTaskManager.shared.save(theme: currentTheme)
             NotificationManager.shared.scheduleEarlyNotifications(tasksByDate: tasksByDate, offsets: notificationOffsets)
         }
-        .onChange(of: selectedTab) { newTab in
+        .onChange(of: selectedTab) { oldTab, newTab in
             PostHogSDK.shared.capture("tab_changed", properties: ["target_tab": "\(newTab)"])
         }
-        .onChange(of: selectedDate) { newDate in
+        .onChange(of: selectedDate) { oldDate, newDate in
             syncCalendar(for: newDate)
         }
-        .onChange(of: tasksByDate) { newValue in
+        .onChange(of: tasksByDate) { oldTasks, newTasks in
             saveDebounceTask?.cancel()
             saveDebounceTask = Task {
                 try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s debounce
                 if !Task.isCancelled {
-                    SharedTaskManager.shared.save(tasksByDate: newValue)
+                    SharedTaskManager.shared.save(tasksByDate: newTasks)
                     WidgetCenter.shared.reloadAllTimelines()
-                    NotificationManager.shared.scheduleEarlyNotifications(tasksByDate: newValue, offsets: notificationOffsets)
+                    NotificationManager.shared.scheduleEarlyNotifications(tasksByDate: newTasks, offsets: notificationOffsets)
                 }
             }
         }
-        .onChange(of: notificationOffsetsData) { _ in
+        .onChange(of: notificationOffsetsData) {
             NotificationManager.shared.scheduleEarlyNotifications(tasksByDate: tasksByDate, offsets: notificationOffsets)
         }
-        .onChange(of: is24HourClock) { newValue in
-            SharedTaskManager.shared.save(is24HourClock: newValue)
+        .onChange(of: is24HourClock) { oldVal, newVal in
+            SharedTaskManager.shared.save(is24HourClock: newVal)
             WidgetCenter.shared.reloadAllTimelines()
         }
-        .onChange(of: currentTheme) { newValue in
-            SharedTaskManager.shared.save(theme: newValue)
+        .onChange(of: currentTheme) { oldVal, newVal in
+            SharedTaskManager.shared.save(theme: newVal)
             WidgetCenter.shared.reloadAllTimelines()
         }
-        .onChange(of: calendarManager.eventsDidChange) { _ in
+        .onChange(of: calendarManager.eventsDidChange) {
             syncCalendar(for: selectedDate)
         }
-        .onChange(of: GoogleCalendarManager.shared.eventsDidChange) { _ in
+        .onChange(of: GoogleCalendarManager.shared.eventsDidChange) {
             syncCalendar(for: selectedDate)
         }
-        .onChange(of: googleCalendarManager.isSignedIn) { newValue in
-            if newValue {
+        .onChange(of: googleCalendarManager.isSignedIn) { oldVal, newVal in
+            if newVal {
                 syncCalendar(for: selectedDate)
             }
         }
