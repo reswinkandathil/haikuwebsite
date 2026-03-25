@@ -43,12 +43,12 @@ struct TutorialOverlayView: View {
                 
                 Button(action: {
                     if step < 3 {
-                        withAnimation { 
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { 
                             step += 1 
                             AnalyticsManager.shared.capture("tutorial_step_completed", properties: ["step": step])
                         }
                     } else {
-                        withAnimation { 
+                        withAnimation(.easeInOut(duration: 0.3)) { 
                             isPresented = false 
                             AnalyticsManager.shared.capture("tutorial_completed")
                         }
@@ -89,6 +89,10 @@ struct TutorialOverlayView: View {
                 .multilineTextAlignment(.center)
                 .lineSpacing(6)
         }
-        .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .move(edge: .leading).combined(with: .opacity)))
+        .id(step) // Key for smooth transition
+        .transition(.asymmetric(
+            insertion: .opacity.combined(with: .scale(scale: 0.95)).combined(with: .offset(x: 20)),
+            removal: .opacity.combined(with: .offset(x: -20))
+        ))
     }
 }

@@ -154,7 +154,7 @@ struct ContentView: View {
         }
         .onAppear {
             if hasCompletedOnboarding && !hasSeenTutorial {
-                withAnimation(.easeInOut(duration: 0.5)) {
+                withAnimation(.easeInOut(duration: 0.4)) {
                     showingTutorial = true
                     hasSeenTutorial = true
                 }
