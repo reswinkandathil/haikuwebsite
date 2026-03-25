@@ -65,6 +65,7 @@ struct ClockView: View {
                             .onEnded { _ in
                                 if let drag = activeDrag, let task = tasks.first(where: { $0.id == drag.taskId }) {
                                     onTaskUpdated?(task)
+                                    logAnalytics("task_modified_via_drag", properties: ["mode": "\(drag.mode)"])
                                 }
                                 activeDrag = nil
                                 tasks.sort { $0.startMinutes < $1.startMinutes }
@@ -88,17 +89,23 @@ struct ClockView: View {
 
                 Circle()
                     .fill(
-                        RadialGradient(colors: [clockFaceColor.opacity(0.8), clockFaceColor], center: .center, startRadius: 0, endRadius: faceRadius)
+                        RadialGradient(colors: [clockFaceColor.opacity(0.9), clockFaceColor], center: .center, startRadius: 0, endRadius: faceRadius)
                     )
                     .frame(width: faceRadius * 2, height: faceRadius * 2)
-                    .shadow(color: shadowDark.opacity(0.8), radius: 12, x: 10, y: 10)
-                    .shadow(color: shadowLight.opacity(0.5), radius: 12, x: -10, y: -10)
+                    .shadow(color: shadowDark.opacity(0.4), radius: 15, x: 8, y: 8) // Softer, deeper shadow
+                    .shadow(color: shadowLight.opacity(0.3), radius: 15, x: -8, y: -8)
                     .overlay(
                         Circle()
                             .stroke(
-                                LinearGradient(colors: [textForeground.opacity(0.2), .clear, textForeground.opacity(0.1)], startPoint: .topLeading, endPoint: .bottomTrailing),
-                                lineWidth: 2
+                                LinearGradient(colors: [textForeground.opacity(0.15), .clear, textForeground.opacity(0.05)], startPoint: .topLeading, endPoint: .bottomTrailing),
+                                lineWidth: 1
                             )
+                    )
+                    .overlay(
+                        // Frosted / Ceramic Texture
+                        Circle()
+                            .fill(.white.opacity(0.02))
+                            .blur(radius: 1)
                     )
                     .allowsHitTesting(false)
                 
@@ -255,7 +262,7 @@ struct ClockView: View {
                         path.move(to: CGPoint(x: startX, y: startY))
                         path.addLine(to: CGPoint(x: endX, y: endY))
                     }
-                    .stroke(goldColor.opacity(isHour ? 0.8 : 0.3), lineWidth: isHour ? 2 : 1)
+                    .stroke(goldColor.opacity(isHour ? 0.6 : 0.2), lineWidth: isHour ? 1.5 : 0.5)
                 }
                 .allowsHitTesting(false)
 
@@ -294,6 +301,7 @@ struct ClockView: View {
                     Button(action: {
                         withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
                             isFlowState.toggle()
+                            logAnalytics("flow_state_toggled", properties: ["is_active": isFlowState])
                         }
                     }) {
                         VStack(spacing: 4) {
@@ -362,6 +370,12 @@ struct ClockView: View {
                 }
             }
         }
+    }
+    
+    // Lightweight analytics shim to avoid hard dependency on an AnalyticsManager implementation
+    private func logAnalytics(_ event: String, properties: [String: Any] = [:]) {
+        // Intentionally left as a no-op. Hook up your analytics SDK here if desired.
+        // print("Analytics: \(event) -> \(properties)")
     }
     
     // MARK: - Drag Logic

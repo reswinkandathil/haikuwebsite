@@ -43,9 +43,15 @@ struct TutorialOverlayView: View {
                 
                 Button(action: {
                     if step < 3 {
-                        withAnimation { step += 1 }
+                        withAnimation { 
+                            step += 1 
+                            AnalyticsManager.shared.capture("tutorial_step_completed", properties: ["step": step])
+                        }
                     } else {
-                        withAnimation { isPresented = false }
+                        withAnimation { 
+                            isPresented = false 
+                            AnalyticsManager.shared.capture("tutorial_completed")
+                        }
                     }
                 }) {
                     Text(step < 3 ? "Next" : "Got it")
@@ -58,6 +64,9 @@ struct TutorialOverlayView: View {
                 .padding(.bottom, 50)
             }
             .padding(40)
+        }
+        .onAppear {
+            AnalyticsManager.shared.capture("tutorial_started")
         }
     }
     

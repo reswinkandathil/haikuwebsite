@@ -1,7 +1,6 @@
 import SwiftUI
 internal import Combine
 import WidgetKit
-import PostHog
 
 struct ContentView: View {
     @AppStorage("appTheme") private var currentTheme: AppTheme = .sage
@@ -166,7 +165,7 @@ struct ContentView: View {
             NotificationManager.shared.scheduleEarlyNotifications(tasksByDate: tasksByDate, offsets: notificationOffsets)
         }
         .onChange(of: selectedTab) { oldTab, newTab in
-            PostHogSDK.shared.capture("tab_changed", properties: ["target_tab": "\(newTab)"])
+            AnalyticsManager.shared.capture("tab_changed", properties: ["target_tab": "\(newTab)"])
         }
         .onChange(of: selectedDate) { oldDate, newDate in
             syncCalendar(for: newDate)
@@ -216,7 +215,7 @@ struct ContentView: View {
 
             ZStack {
                 HStack(spacing: 20) {
-                    Button(action: { changeDate(by: -1) }) {
+                    Button(action: { changeDate(by: -1, source: "chevron") }) {
                         Image(systemName: "chevron.left")
                             .font(.system(size: 12, weight: .light))
                             .foregroundStyle(goldColor.opacity(0.6))
@@ -232,7 +231,7 @@ struct ContentView: View {
                             .transition(.opacity)
                     }
 
-                    Button(action: { changeDate(by: 1) }) {
+                    Button(action: { changeDate(by: 1, source: "chevron") }) {
                         Image(systemName: "chevron.right")
                             .font(.system(size: 12, weight: .light))
                             .foregroundStyle(goldColor.opacity(0.6))
@@ -634,7 +633,7 @@ struct ContentView: View {
                                             }
                                         }
                                         // PostHog: Track task deletion
-                                        PostHogSDK.shared.capture("task_deleted")
+                                        AnalyticsManager.shared.capture("task_deleted")
                                         _ = withAnimation(.easeInOut) {
                                             tasksByDate[selectedDate]?.remove(at: index)
                                         }
@@ -661,28 +660,38 @@ struct ContentView: View {
                     if abs(value.translation.width) > abs(value.translation.height) {
                         if value.translation.width < 0 {
                             // Swipe left -> Next day
-                            changeDate(by: 1)
+                            changeDate(by: 1, source: "swipe")
                         } else if value.translation.width > 0 {
                             // Swipe right -> Previous day
-                            changeDate(by: -1)
+                            changeDate(by: -1, source: "swipe")
                         }
                     }
                 }
         )
     }
 
-    private func changeDate(by days: Int) {
+    private func changeDate(by days: Int, source: String = "button") {
         withAnimation(.easeInOut(duration: 0.3)) {
             if let newDate = Calendar.current.date(byAdding: .day, value: days, to: selectedDate) {
                 selectedDate = newDate
+                AnalyticsManager.shared.capture("date_changed", properties: ["days_delta": days, "source": source])
             }
         }
     }
 
-    private func formattedSelectedDate() -> String {
+    private let dayFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "MMMM d"
-        return formatter.string(from: selectedDate)
+        return formatter
+    }()
+
+    private let timeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        return formatter
+    }()
+
+    private func formattedSelectedDate() -> String {
+        return dayFormatter.string(from: selectedDate)
     }
 
     private func formatTime(minutes: Int) -> String {
@@ -693,9 +702,9 @@ struct ContentView: View {
         comps.hour = h
         comps.minute = min
         let date = Calendar.current.date(from: comps) ?? Date()
-        let formatter = DateFormatter()
-        formatter.dateFormat = is24HourClock ? "HH:mm" : "h:mm a"
-        return formatter.string(from: date)
+        
+        timeFormatter.dateFormat = is24HourClock ? "HH:mm" : "h:mm a"
+        return timeFormatter.string(from: date)
     }
 
     private let quotes: [String] = [

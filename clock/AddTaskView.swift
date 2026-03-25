@@ -1,5 +1,4 @@
 import SwiftUI
-import PostHog
 
 struct AddTaskView: View {
     @AppStorage("appTheme") private var currentTheme: AppTheme = .sage
@@ -380,7 +379,7 @@ struct AddTaskView: View {
             tasksByDate[day] = dayTasks
 
             // PostHog: Track task update
-            PostHogSDK.shared.capture("task_updated", properties: [
+            AnalyticsManager.shared.capture("task_updated", properties: [
                 "duration_minutes": updatedTask.endMinutes - updatedTask.startMinutes,
             ])
 
@@ -417,7 +416,7 @@ struct AddTaskView: View {
             tasksByDate[day] = dayTasks
 
             // PostHog: Track task creation
-            PostHogSDK.shared.capture("task_created", properties: [
+            AnalyticsManager.shared.capture("task_created", properties: [
                 "duration_minutes": newTask.endMinutes - newTask.startMinutes,
                 "from_brain_dump": brainDumpTaskId != nil,
             ])

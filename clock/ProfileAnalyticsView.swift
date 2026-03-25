@@ -191,6 +191,7 @@ struct ProfileAnalyticsView: View {
                                         title: "Peak Focus Window",
                                         description: "This identifies your 'Biological Prime Time'. We analyze the density of your scheduled tasks across all days to find the specific hour when you are most consistently active. Scheduling Deep Work during this window can significantly boost productivity."
                                     )
+                                    AnalyticsManager.shared.capture("analytics_info_clicked", properties: ["metric": "peak_focus"])
                                 }) {
                                     Image(systemName: "info.circle")
                                         .font(.system(size: 10))
@@ -268,6 +269,7 @@ struct ProfileAnalyticsView: View {
                                         title: "Focus Momentum",
                                         description: "This compares your total focus hours from the last 7 days against the previous 7 days. It helps you visualize if you are building positive momentum or if you're hitting a slump and need to adjust your workload."
                                     )
+                                    AnalyticsManager.shared.capture("analytics_info_clicked", properties: ["metric": "focus_momentum"])
                                 }) {
                                     Image(systemName: "info.circle")
                                         .font(.system(size: 10))
@@ -350,6 +352,7 @@ struct ProfileAnalyticsView: View {
                                         title: "Time Distribution",
                                         description: "A categorical breakdown of how you spend your time. We group tasks by their assigned category and calculate the percentage of your total 'Haiku time' each category occupies. This helps identify if your actions align with your true priorities."
                                     )
+                                    AnalyticsManager.shared.capture("analytics_info_clicked", properties: ["metric": "time_distribution"])
                                 }) {
                                     Image(systemName: "info.circle")
                                         .font(.system(size: 10))

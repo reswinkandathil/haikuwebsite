@@ -1,5 +1,4 @@
 import SwiftUI
-import PostHog
 import EventKit
 
 struct ProfileSettingsView: View {
@@ -45,7 +44,7 @@ struct ProfileSettingsView: View {
 
                 if !isPro {
                     Button(action: { 
-                        PostHogSDK.shared.capture("upgrade_banner_clicked")
+                        AnalyticsManager.shared.capture("upgrade_banner_clicked")
                         showingPaywall = true 
                     }) {
                         HStack {
@@ -125,7 +124,7 @@ struct ProfileSettingsView: View {
                                         showingCustomOffsetAlert = true
                                     }
                                 } else {
-                                    PostHogSDK.shared.capture("upgrade_custom_notification_clicked")
+                                    AnalyticsManager.shared.capture("upgrade_custom_notification_clicked")
                                     showingPaywall = true
                                 }
                             }) {
@@ -211,7 +210,7 @@ struct ProfileSettingsView: View {
                                         appleCalendarStatus = EKEventStore.authorizationStatus(for: .event)
                                     }
                                 } else {
-                                    PostHogSDK.shared.capture("upgrade_apple_calendar_clicked")
+                                    AnalyticsManager.shared.capture("upgrade_apple_calendar_clicked")
                                     showingPaywall = true
                                 }
                             }) {
@@ -256,7 +255,7 @@ struct ProfileSettingsView: View {
                                         }
                                     }
                                 } else {
-                                    PostHogSDK.shared.capture("upgrade_google_signin_clicked")
+                                    AnalyticsManager.shared.capture("upgrade_google_signin_clicked")
                                     showingPaywall = true
                                 }
                             }) {
@@ -338,10 +337,10 @@ struct ProfileSettingsView: View {
             HaikuProView()
         }
         .onChange(of: currentTheme) { oldTheme, newTheme in
-            PostHogSDK.shared.capture("theme_changed", properties: ["theme_name": newTheme.name])
+            AnalyticsManager.shared.capture("theme_changed", properties: ["theme_name": newTheme.name])
         }
         .onChange(of: is24HourClock) { oldVal, newVal in
-            PostHogSDK.shared.capture("clock_format_toggled", properties: ["is_24_hour": newVal])
+            AnalyticsManager.shared.capture("clock_format_toggled", properties: ["is_24_hour": newVal])
         }
     }
 }

@@ -1,7 +1,6 @@
 import SwiftUI
 import RevenueCat
 import RevenueCatUI
-import PostHog
 
 struct HaikuProView: View {
     @AppStorage("appTheme") private var currentTheme: AppTheme = .sage
@@ -165,7 +164,7 @@ struct HaikuProView: View {
     }
 
     private func buyPro(_ package: Package) {
-        PostHogSDK.shared.capture("purchase_initiated", properties: [
+        AnalyticsManager.shared.capture("purchase_initiated", properties: [
             "package_identifier": package.identifier,
             "price": package.localizedPriceString,
         ])
@@ -175,6 +174,7 @@ struct HaikuProView: View {
                 try await storeManager.purchase(package: package)
             } catch {
                 print("Purchase failed: \(error)")
+                AnalyticsManager.shared.capture("purchase_failed", properties: ["error": error.localizedDescription])
             }
             isPurchasing = false
         }
