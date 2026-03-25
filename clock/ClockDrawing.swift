@@ -103,9 +103,16 @@ struct ClockView: View {
                     .allowsHitTesting(false)
                 
                 if is24HourClock {
-                    // Empty 24H Track (Outer)
+                    // Empty 24H Track (Outer) - Clean Engraved Look
                     Circle()
-                        .stroke(taskTrackColor.opacity(0.4), lineWidth: ringWidth)
+                        .stroke(
+                            LinearGradient(
+                                colors: [shadowDark.opacity(0.7), shadowLight.opacity(0.3)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: ringWidth
+                        )
                         .frame(width: pmRingRadius * 2, height: pmRingRadius * 2)
                         .allowsHitTesting(false)
                         
@@ -188,20 +195,29 @@ struct ClockView: View {
                         let r = is24HourClock ? pmRingRadius : (frag.isAM ? amRingRadius : pmRingRadius)
 
                         ZStack {
+                            // Subtle Bottom Shadow for slight depth
+                            TaskArc(startMinutes: frag.startMinutes, endMinutes: frag.endMinutes, is24HourClock: is24HourClock)
+                                .stroke(Color.black.opacity(0.15), style: StrokeStyle(lineWidth: ringWidth, lineCap: .round))
+                                .offset(x: 0.5, y: 0.5)
+                            
+                            // Main Task Fill (True color)
                             TaskArc(startMinutes: frag.startMinutes, endMinutes: frag.endMinutes, is24HourClock: is24HourClock)
                                 .stroke(
-                                    AngularGradient(
-                                        colors: [task.color.opacity(opacity * 0.8), task.color.opacity(opacity), task.color.opacity(opacity * 0.8)],
-                                        center: .center,
-                                        startAngle: .degrees(is24HourClock ? frag.startMinutes * 0.25 - 90 : frag.startMinutes * 0.5 - 90),
-                                        endAngle: .degrees(is24HourClock ? frag.endMinutes * 0.25 - 90 : frag.endMinutes * 0.5 - 90)
-                                    ),
+                                    task.color.opacity(opacity),
                                     style: StrokeStyle(lineWidth: ringWidth, lineCap: .round)
                                 )
-                                .frame(width: r * 2, height: r * 2)
-                                .shadow(color: glowColor, radius: glowRadius)
-                                .allowsHitTesting(true)
+                            
+                            // Very subtle Top Highlight
+                            TaskArc(startMinutes: frag.startMinutes, endMinutes: frag.endMinutes, is24HourClock: is24HourClock)
+                                .stroke(
+                                    LinearGradient(colors: [.white.opacity(0.2), .clear], startPoint: .topLeading, endPoint: .bottomTrailing),
+                                    style: StrokeStyle(lineWidth: ringWidth, lineCap: .round)
+                                )
+                                .blendMode(.overlay)
                         }
+                        .frame(width: r * 2, height: r * 2)
+                        .shadow(color: glowColor, radius: glowRadius)
+                        .allowsHitTesting(true)
                     }
                 }
 

@@ -115,10 +115,28 @@ struct StaticClockView: View {
                     ForEach(Array(frags.enumerated()), id: \.offset) { index, frag in
                         let r = is24HourClock ? pmRingRadius : (frag.isAM ? amRingRadius : pmRingRadius)
 
-                        TaskArc(startMinutes: frag.startMinutes, endMinutes: frag.endMinutes, is24HourClock: is24HourClock)
-                            .trim(from: 0, to: animationProgress)
-                            .stroke(task.color.opacity(opacity), style: StrokeStyle(lineWidth: ringWidth, lineCap: .round))
-                            .frame(width: r * 2, height: r * 2)
+                        ZStack {
+                            // Depth shadow
+                            TaskArc(startMinutes: frag.startMinutes, endMinutes: frag.endMinutes, is24HourClock: is24HourClock)
+                                .trim(from: 0, to: animationProgress)
+                                .stroke(Color.black.opacity(0.1), style: StrokeStyle(lineWidth: ringWidth, lineCap: .round))
+                                .offset(x: 0.5, y: 0.5)
+                            
+                            // Main Task Fill
+                            TaskArc(startMinutes: frag.startMinutes, endMinutes: frag.endMinutes, is24HourClock: is24HourClock)
+                                .trim(from: 0, to: animationProgress)
+                                .stroke(task.color.opacity(opacity), style: StrokeStyle(lineWidth: ringWidth, lineCap: .round))
+                            
+                            // Highlight
+                            TaskArc(startMinutes: frag.startMinutes, endMinutes: frag.endMinutes, is24HourClock: is24HourClock)
+                                .trim(from: 0, to: animationProgress)
+                                .stroke(
+                                    LinearGradient(colors: [.white.opacity(0.15), .clear], startPoint: .topLeading, endPoint: .bottomTrailing),
+                                    style: StrokeStyle(lineWidth: ringWidth, lineCap: .round)
+                                )
+                                .blendMode(.overlay)
+                        }
+                        .frame(width: r * 2, height: r * 2)
                     }
                 }
 
