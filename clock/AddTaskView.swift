@@ -253,17 +253,27 @@ struct AddTaskView: View {
                     Divider()
                         .background(goldColor.opacity(0.2))
                     
-                    Button(action: saveTask) {
-                        Text(taskToEdit == nil ? "Schedule Task" : "Update Task")
-                            .font(.system(size: 16, weight: .bold, design: .serif))
-                            .foregroundStyle(bgColor)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 18)
-                            .background(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .fill(goldColor)
-                                    .shadow(color: .black.opacity(0.2), radius: 10, x: 0, y: 5)
-                            )
+                    VStack(spacing: 8) {
+                        if selectedCategoryId == nil {
+                            Text("Please select a category")
+                                .font(.system(size: 12, weight: .medium, design: .serif))
+                                .foregroundStyle(goldColor.opacity(0.8))
+                                .transition(.opacity)
+                        }
+                        
+                        Button(action: saveTask) {
+                            Text(taskToEdit == nil ? "Schedule Task" : "Update Task")
+                                .font(.system(size: 16, weight: .bold, design: .serif))
+                                .foregroundStyle(selectedCategoryId == nil ? goldColor.opacity(0.3) : bgColor)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 18)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .fill(selectedCategoryId == nil ? goldColor.opacity(0.1) : goldColor)
+                                        .shadow(color: .black.opacity(selectedCategoryId == nil ? 0 : 0.2), radius: 10, x: 0, y: 5)
+                                )
+                        }
+                        .disabled(selectedCategoryId == nil)
                     }
                     .padding(.horizontal, 32)
                     .padding(.vertical, 24)
