@@ -19,5 +19,9 @@
     </array>
     <key>GIDClientID</key>
     <string>313459507705-1k57s4u6ejhm8kl5c93ql4hu5th2r0eq.apps.googleusercontent.com</string>
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+    </array>
 </dict>
 </plist>

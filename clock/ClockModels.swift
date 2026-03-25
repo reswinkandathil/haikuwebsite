@@ -135,6 +135,7 @@ struct BrainDumpTask: Identifiable, Codable {
     var title: String
     var isCompleted: Bool = false
     var scheduledDate: Date? = nil
+    var completedDate: Date? = nil
 }
 
 class BrainDumpManager: ObservableObject {
@@ -148,8 +149,21 @@ class BrainDumpManager: ObservableObject {
     
     init() {
         if let data = UserDefaults.standard.data(forKey: "brainDumpTasks"),
-           let decoded = try? JSONDecoder().decode([BrainDumpTask].self, from: data) {
+           var decoded = try? JSONDecoder().decode([BrainDumpTask].self, from: data) {
+            
+            // Migration: Assign today's date to completed tasks missing a completedDate
+            var modified = false
+            for i in 0..<decoded.count {
+                if decoded[i].isCompleted && decoded[i].completedDate == nil {
+                    decoded[i].completedDate = Date()
+                    modified = true
+                }
+            }
+            
             self.tasks = decoded
+            if modified {
+                save()
+            }
         }
         sortTasks()
     }

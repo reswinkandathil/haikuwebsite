@@ -3,6 +3,7 @@ import SwiftUI
 struct AddTaskView: View {
     @AppStorage("appTheme") private var currentTheme: AppTheme = .sage
     @Environment(\.dismiss) var dismiss
+    @EnvironmentObject var storeManager: StoreManager
     @Binding var tasksByDate: [Date: [ClockTask]]
     @Binding var selectedDate: Date
     
@@ -334,7 +335,7 @@ struct AddTaskView: View {
         
         let day = cal.startOfDay(for: taskDate)
         
-        let isPro = true // Hardcoded for testing
+        let isPro = storeManager.isPro
         
         if let toEdit = taskToEdit {
             // Remove old version if date changed

@@ -12,7 +12,17 @@ struct TodoView: View {
         case completed = "Done"
     }
     @State private var selectedFilter: Filter = .active
+    
+    enum DoneFilter: String, CaseIterable {
+        case all = "All"
+        case daily = "Daily"
+        case weekly = "Weekly"
+    }
+    @State private var selectedDoneFilter: DoneFilter = .all
+    
     @State private var taskJustCompletedIds = Set<UUID>()
+    
+    @State private var showingClearAlert = false
     
     // Selection for scheduling
     @State private var isSelectionMode = false
@@ -28,7 +38,33 @@ struct TodoView: View {
         case .active:
             return brainDumpManager.tasks.filter { !$0.isCompleted || taskJustCompletedIds.contains($0.id) }
         case .completed:
-            return brainDumpManager.tasks.filter { $0.isCompleted && !taskJustCompletedIds.contains($0.id) }
+            let completed = brainDumpManager.tasks.filter { $0.isCompleted && !taskJustCompletedIds.contains($0.id) }
+            let cal = Calendar.current
+            let now = Date()
+            
+            switch selectedDoneFilter {
+            case .all:
+                // Show everything older than this week
+                return completed.filter { task in
+                    guard let date = task.completedDate else { return false }
+                    return !cal.isDate(date, equalTo: now, toGranularity: .weekOfYear) ||
+                           !cal.isDate(date, equalTo: now, toGranularity: .yearForWeekOfYear)
+                }
+            case .daily:
+                // Show only today
+                return completed.filter { task in
+                    guard let date = task.completedDate else { return false }
+                    return cal.isDateInToday(date)
+                }
+            case .weekly:
+                // Show this week, but exclude today (so they "moved" here)
+                return completed.filter { task in
+                    guard let date = task.completedDate else { return false }
+                    let isThisWeek = cal.isDate(date, equalTo: now, toGranularity: .weekOfYear) &&
+                                     cal.isDate(date, equalTo: now, toGranularity: .yearForWeekOfYear)
+                    return isThisWeek && !cal.isDateInToday(date)
+                }
+            }
         }
     }
 
@@ -42,7 +78,7 @@ struct TodoView: View {
                     .padding(.top, 40)
                     .padding(.bottom, 24)
 
-                // Filter Picker
+                // Main Filter Picker (Inbox / Done)
                 HStack(spacing: 0) {
                     ForEach(Filter.allCases, id: \.self) { filter in
                         Button(action: {
@@ -66,7 +102,64 @@ struct TodoView: View {
                     }
                 }
                 .padding(.horizontal, 40)
-                .padding(.bottom, 20)
+                .padding(.bottom, 12)
+
+                // Sub-Filter for Done tab
+                if selectedFilter == .completed {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 12) {
+                            ForEach(DoneFilter.allCases, id: \.self) { df in
+                                Button(action: {
+                                    withAnimation(.snappy) {
+                                        selectedDoneFilter = df
+                                    }
+                                }) {
+                                    Text(df.rawValue.uppercased())
+                                        .font(.system(size: 10, weight: selectedDoneFilter == df ? .bold : .medium, design: .serif))
+                                        .foregroundStyle(selectedDoneFilter == df ? goldColor : currentTheme.textForeground.opacity(0.4))
+                                        .padding(.horizontal, 16)
+                                        .padding(.vertical, 8)
+                                        .background(
+                                            ZStack {
+                                                Capsule()
+                                                    .fill(selectedDoneFilter == df ? goldColor.opacity(0.1) : Color.clear)
+                                                Capsule()
+                                                    .stroke(selectedDoneFilter == df ? goldColor.opacity(0.3) : currentTheme.textForeground.opacity(0.1), lineWidth: 1)
+                                            }
+                                        )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            
+                            if !filteredTasks.isEmpty {
+                                Rectangle()
+                                    .fill(currentTheme.textForeground.opacity(0.1))
+                                    .frame(width: 1, height: 20)
+                                    .padding(.horizontal, 4)
+                                
+                                Button(action: { showingClearAlert = true }) {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "trash")
+                                            .font(.system(size: 10))
+                                        Text("CLEAR")
+                                            .font(.system(size: 10, weight: .bold, design: .serif))
+                                    }
+                                    .foregroundStyle(Color.red.opacity(0.7))
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 8)
+                                    .background(
+                                        Capsule()
+                                            .stroke(Color.red.opacity(0.2), lineWidth: 1)
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.horizontal, 40)
+                    }
+                    .padding(.bottom, 20)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
                 
                 if !isSelectionMode && selectedFilter == .active {
                     // Quick Add Input
@@ -110,7 +203,7 @@ struct TodoView: View {
                         Image(systemName: selectedFilter == .active ? "brain.head.profile" : "checkmark.seal")
                             .font(.system(size: 32))
                             .foregroundStyle(goldColor.opacity(0.5) as Color)
-                        Text(selectedFilter == .active ? "Clear your mind" : "No completed tasks")
+                        Text(selectedFilter == .active ? "Clear your mind" : "No tasks in \(selectedDoneFilter.rawValue)")
                             .font(.system(size: 14, weight: .light))
                             .foregroundStyle(currentTheme.textForeground.opacity(0.5) as Color)
                     }
@@ -122,6 +215,7 @@ struct TodoView: View {
                                 title: task.title,
                                 isCompleted: task.isCompleted,
                                 scheduledDate: task.scheduledDate,
+                                completedDate: task.completedDate,
                                 isSelected: selectedTaskIds.contains(task.id),
                                 isSelectionMode: isSelectionMode,
                                 onToggle: {
@@ -136,13 +230,18 @@ struct TodoView: View {
                                             let wasCompleted = brainDumpManager.tasks[index].isCompleted
                                             withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
                                                 brainDumpManager.tasks[index].isCompleted.toggle()
+                                                if brainDumpManager.tasks[index].isCompleted {
+                                                    brainDumpManager.tasks[index].completedDate = Date()
+                                                } else {
+                                                    brainDumpManager.tasks[index].completedDate = nil
+                                                }
                                             }
                                             
                                             let nowCompleted = brainDumpManager.tasks[index].isCompleted
                                             
                                             if !wasCompleted && nowCompleted {
                                                 // Task was just marked as completed
-                                                taskJustCompletedIds.insert(task.id)
+                                                taskJustCompletedIds.insert(task.id) 
                                                 UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
                                                 
                                                 // After 1.2s, move it to the completed list (remove from the active view)
@@ -211,7 +310,7 @@ struct TodoView: View {
                 }
 
                 // Floating Action Button (Toggle)
-                Button(action: {
+                Button(action: { 
                     if !isSelectionMode && brainDumpManager.tasks.isEmpty { return }
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
                         isSelectionMode.toggle()
@@ -241,6 +340,14 @@ struct TodoView: View {
         .sheet(isPresented: $showingBulkImport) {
             BulkImportView(isPresented: $showingBulkImport, manager: brainDumpManager)
         }
+        .alert("Clear \(selectedDoneFilter.rawValue) Tasks?", isPresented: $showingClearAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Clear", role: .destructive) {
+                clearCurrentFilter()
+            }
+        } message: {
+            Text("Are you sure you want to clear your \(selectedDoneFilter.rawValue.lowercased()) list? This action cannot be undone.")
+        }
     }
     
     private func addTask() {
@@ -256,6 +363,13 @@ struct TodoView: View {
     private func moveTask(from source: IndexSet, to destination: Int) {
         brainDumpManager.tasks.move(fromOffsets: source, toOffset: destination)
     }
+
+    private func clearCurrentFilter() {
+        let idsToRemove = Set(filteredTasks.map { $0.id })
+        withAnimation {
+            brainDumpManager.tasks.removeAll { idsToRemove.contains($0.id) }
+        }
+    }
 }
 
 struct BrainDumpRow: View {
@@ -263,14 +377,14 @@ struct BrainDumpRow: View {
     var title: String
     var isCompleted: Bool
     var scheduledDate: Date? = nil
+    var completedDate: Date? = nil
     var isSelected: Bool = false
     var isSelectionMode: Bool = false
     var onToggle: () -> Void
 
-    private func formatScheduledDate(_ date: Date) -> String {
+    private func formatDate(_ date: Date) -> String {
         let formatter = DateFormatter()
-        // Friday on March 19
-        formatter.dateFormat = "EEEE 'on' MMMM d"
+        formatter.dateFormat = "MMM d, yyyy"
         return formatter.string(from: date)
     }
 
@@ -293,10 +407,14 @@ struct BrainDumpRow: View {
                         .foregroundStyle(currentTheme.textForeground.opacity(isCompleted ? 0.4 : 0.9) as Color)
                         .strikethrough(isCompleted && !isSelectionMode, color: (currentTheme.textForeground.opacity(0.4) as Color))
                     
-                    if let scheduledDate = scheduledDate {
-                        Text("\(formatScheduledDate(scheduledDate))")
-                            .font(.system(size: 12, weight: .light))
-                            .foregroundStyle(currentTheme.textForeground.opacity(0.5) as Color)
+                    if isCompleted, let completedDate = completedDate {
+                        Text("Completed on \(formatDate(completedDate))")
+                            .font(.system(size: 11, weight: .light))
+                            .foregroundStyle(currentTheme.textForeground.opacity(0.4) as Color)
+                    } else if let scheduledDate = scheduledDate {
+                        Text("Scheduled on \(formatDate(scheduledDate))")
+                            .font(.system(size: 11, weight: .light))
+                            .foregroundStyle(currentTheme.textForeground.opacity(0.4) as Color)
                     }
                 }
 

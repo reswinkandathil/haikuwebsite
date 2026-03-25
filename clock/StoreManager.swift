@@ -17,6 +17,13 @@ class StoreManager: ObservableObject {
         // Initialize from local cache first for instant UI response
         self.isPro = SharedTaskManager.shared.loadIsPro()
         
+        // Grant TestFlight users access to Pro automatically
+        if Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt" {
+            print("RevenueCat: TestFlight/Sandbox environment detected. Granting Pro access.")
+            self.isPro = true
+            SharedTaskManager.shared.save(isPro: true)
+        }
+        
         // Then fetch fresh status from server
         Task {
             if let info = try? await Purchases.shared.customerInfo() {
@@ -51,10 +58,14 @@ class StoreManager: ObservableObject {
         }
     }
     
-    func updateProStatus(_ info: CustomerInfo) {
-        let proActive = info.entitlements[proEntitlementID]?.isActive == true
+    private func updateProStatus(_ info: CustomerInfo) {
+        var proActive = info.entitlements[proEntitlementID]?.isActive == true
         print("RevenueCat: Checking entitlement '\(proEntitlementID)'. Active: \(proActive)")
-        print("RevenueCat: Current active entitlements: \(info.entitlements.active.keys)")
+        
+        // Keep Pro active for TestFlight/Sandbox even if RevenueCat says otherwise
+        if Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt" {
+            proActive = true
+        }
         
         if proActive != self.isPro {
             print("RevenueCat: Pro status changing from \(self.isPro) to \(proActive)")
