@@ -66,9 +66,9 @@ struct AddTaskView: View {
             ZStack {
                 bgColor.ignoresSafeArea()
                 
+            VStack(spacing: 0) {
                 ScrollView {
                     VStack(spacing: 32) {
-                        
                         // Categories
                         VStack(alignment: .leading, spacing: 12) {
                             Text("CATEGORIES")
@@ -244,24 +244,35 @@ struct AddTaskView: View {
                                     .shadow(color: shadowLight, radius: 5, x: -4, y: -4)
                             )
                         }
-                        
-                        // Add Button
-                        Button(action: saveTask) {
-                            Text(taskToEdit == nil ? "Add to Agenda" : "Update Task")
-                                .font(.system(size: 16, weight: .medium, design: .serif))
-                                .foregroundStyle(bgColor)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 16)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(goldColor)
-                                        .shadow(color: .black.opacity(0.3), radius: 5, x: 2, y: 4)
-                                )
-                        }
-                        .padding(.top, 16)
                     }
                     .padding(32)
                 }
+
+                // Fixed Bottom Action Bar
+                VStack(spacing: 0) {
+                    Divider()
+                        .background(goldColor.opacity(0.2))
+                    
+                    Button(action: saveTask) {
+                        Text(taskToEdit == nil ? "Schedule Task" : "Update Task")
+                            .font(.system(size: 16, weight: .bold, design: .serif))
+                            .foregroundStyle(bgColor)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 18)
+                            .background(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(goldColor)
+                                    .shadow(color: .black.opacity(0.2), radius: 10, x: 0, y: 5)
+                            )
+                    }
+                    .padding(.horizontal, 32)
+                    .padding(.vertical, 24)
+                    .background(
+                        bgColor.opacity(0.9)
+                            .background(.ultraThinMaterial)
+                    )
+                }
+            }
             }
             .navigationTitle(taskToEdit == nil ? "New Task" : "Edit Task")
             .navigationBarTitleDisplayMode(.inline)
