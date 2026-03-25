@@ -264,7 +264,7 @@ struct ProfileSettingsView: View {
                                 HStack(spacing: 12) {
                                     Image(systemName: isPro ? "g.circle.fill" : "lock.fill")
                                         .foregroundStyle(googleCalendarManager.isSignedIn ? Color.red : goldColor)
-                                    Text(googleCalendarManager.isSignedIn ? "Sign Out of Google" : "Sign In with Google")
+                                    Text(googleCalendarManager.isSignedIn ? "Sign Out of Google" : "Sign In with Google (Coming Soon)")
                                         .font(.system(size: 16, weight: .medium))
                                         .foregroundStyle(currentTheme.textForeground.opacity(0.9))
                                     Spacer()
@@ -283,7 +283,7 @@ struct ProfileSettingsView: View {
                             }
                             .buttonStyle(.plain)
 
-                            Text("Connect Google, Microsoft, or iCloud.")
+                            Text("Connect Google or iCloud.")
                                 .font(.system(size: 11, weight: .regular))
                                 .foregroundStyle(currentTheme.textForeground.opacity(0.6))
                                 .multilineTextAlignment(.center)
