@@ -127,7 +127,10 @@ struct HaikuProView: View {
                     }
                     
                     if storeManager.isSandboxMode {
-                        Button(action: { storeManager.unlockProForFree() }) {
+                        Button(action: { 
+                            AnalyticsManager.shared.capture("testflight_free_unlock_clicked")
+                            storeManager.unlockProForFree() 
+                        }) {
                             HStack(spacing: 8) {
                                 Image(systemName: "checkmark.seal.fill")
                                 Text("FREE FOR TESTERS")
@@ -176,7 +179,10 @@ struct HaikuProView: View {
             VStack {
                 HStack {
                     Spacer()
-                    Button(action: { dismiss() }) {
+                    Button(action: { 
+                        AnalyticsManager.shared.capture("paywall_dismissed")
+                        dismiss() 
+                    }) {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 28))
                             .foregroundStyle(currentTheme.textForeground.opacity(0.15))
@@ -190,6 +196,7 @@ struct HaikuProView: View {
             CustomerCenterView()
         }
         .onAppear {
+            AnalyticsManager.shared.capture("paywall_viewed")
             withAnimation(.easeOut(duration: 0.8)) {
                 appearanceAnimate = true
             }

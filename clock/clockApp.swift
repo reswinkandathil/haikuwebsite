@@ -40,6 +40,8 @@ struct clockApp: App {
         let config = PostHogConfig(apiKey: PostHogEnv.projectToken.value, host: PostHogEnv.host.value)
         config.captureApplicationLifecycleEvents = true
         PostHogSDK.shared.setup(config)
+        
+        AnalyticsManager.shared.capture("app_session_started")
     }
     
     var body: some Scene {

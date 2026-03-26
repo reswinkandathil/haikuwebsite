@@ -110,11 +110,11 @@ struct TodoView: View {
                         HStack(spacing: 12) {
                             ForEach(DoneFilter.allCases, id: \.self) { df in
                                 Button(action: {
+                                    AnalyticsManager.shared.capture("brain_dump_done_filter_changed", properties: ["filter": df.rawValue])
                                     withAnimation(.snappy) {
                                         selectedDoneFilter = df
                                     }
-                                }) {
-                                    Text(df.rawValue.uppercased())
+                                }) {                                    Text(df.rawValue.uppercased())
                                         .font(.system(size: 10, weight: selectedDoneFilter == df ? .bold : .medium, design: .serif))
                                         .foregroundStyle(selectedDoneFilter == df ? goldColor : currentTheme.textForeground.opacity(0.4))
                                         .padding(.horizontal, 16)
@@ -241,6 +241,7 @@ struct TodoView: View {
                                             
                                             if !wasCompleted && nowCompleted {
                                                 // Task was just marked as completed
+                                                AnalyticsManager.shared.capture("brain_dump_task_completed")
                                                 taskJustCompletedIds.insert(task.id) 
                                                 UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
                                                 
@@ -252,6 +253,7 @@ struct TodoView: View {
                                                 }
                                             } else if wasCompleted && !nowCompleted {
                                                 // Task was marked as active again
+                                                AnalyticsManager.shared.capture("brain_dump_task_reactivated")
                                                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                                             }
                                         }
@@ -264,6 +266,7 @@ struct TodoView: View {
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                 Button(role: .destructive) {
                                     if let index = brainDumpManager.tasks.firstIndex(where: { $0.id == task.id }) {
+                                        AnalyticsManager.shared.capture("brain_dump_task_deleted")
                                         withAnimation(.easeInOut) {
                                             _ = brainDumpManager.tasks.remove(at: index)
                                         }
@@ -318,6 +321,7 @@ struct TodoView: View {
                             selectedTaskIds.removeAll()
                         }
                     }
+                    AnalyticsManager.shared.capture("brain_dump_selection_mode_toggled", properties: ["is_active": isSelectionMode])
                 }) {
                     ZStack {
                         Circle()
@@ -343,6 +347,7 @@ struct TodoView: View {
         .alert("Clear \(selectedDoneFilter.rawValue) Tasks?", isPresented: $showingClearAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Clear", role: .destructive) {
+                AnalyticsManager.shared.capture("brain_dump_list_cleared", properties: ["filter": selectedDoneFilter.rawValue])
                 clearCurrentFilter()
             }
         } message: {

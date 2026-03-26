@@ -107,6 +107,7 @@ struct AddTaskView: View {
                                         .contextMenu {
                                             Button(role: .destructive, action: {
                                                 if let index = categoryManager.categories.firstIndex(where: { $0.id == cat.id }) {
+                                                    AnalyticsManager.shared.capture("category_deleted", properties: ["name": cat.name])
                                                     categoryManager.categories.remove(at: index)
                                                     if selectedCategoryId == cat.id {
                                                         selectedCategoryId = nil
@@ -158,6 +159,7 @@ struct AddTaskView: View {
                                     ForEach(0..<aestheticColors.count, id: \.self) { index in
                                         Button(action: {
                                             selectedColorIndex = index
+                                            AnalyticsManager.shared.capture("manual_color_selected", properties: ["color_index": index])
                                         }) {
                                             Circle()
                                                 .fill(aestheticColors[index].color)

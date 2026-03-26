@@ -124,6 +124,7 @@ struct ProfileSettingsView: View {
                                         showingCustomOffsetAlert = true
                                     }
                                 } else {
+                                    AnalyticsManager.shared.capture("pro_feature_denied", properties: ["feature": "custom_notification"])
                                     AnalyticsManager.shared.capture("upgrade_custom_notification_clicked")
                                     showingPaywall = true
                                 }
@@ -210,6 +211,7 @@ struct ProfileSettingsView: View {
                                         appleCalendarStatus = EKEventStore.authorizationStatus(for: .event)
                                     }
                                 } else {
+                                    AnalyticsManager.shared.capture("pro_feature_denied", properties: ["feature": "apple_calendar"])
                                     AnalyticsManager.shared.capture("upgrade_apple_calendar_clicked")
                                     showingPaywall = true
                                 }
@@ -249,6 +251,7 @@ struct ProfileSettingsView: View {
                             Button(action: {
                                 if isPro {
                                     if googleCalendarManager.isSignedIn {
+                                        AnalyticsManager.shared.capture("google_signout_clicked")
                                         googleCalendarManager.signOut()
                                     } else {
                                         if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
@@ -257,6 +260,7 @@ struct ProfileSettingsView: View {
                                         }
                                     }
                                 } else {
+                                    AnalyticsManager.shared.capture("pro_feature_denied", properties: ["feature": "google_calendar"])
                                     AnalyticsManager.shared.capture("upgrade_google_signin_clicked")
                                     showingPaywall = true
                                 }
