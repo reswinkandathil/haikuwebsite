@@ -129,24 +129,18 @@ struct ClockView: View {
                         )
                         .frame(width: pmRingRadius * 2, height: pmRingRadius * 2)
                         .allowsHitTesting(false)
-                        
-                    Text("24H")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        .foregroundStyle(goldColor.opacity(0.4))
-                        .position(x: center.x, y: center.y - pmRingRadius)
-                        .allowsHitTesting(false)
 
-                    // Sun/Moon indicators (Moved inward to avoid numbers)
+                    // Sun/Moon indicators (Positioned near labels like the reference image)
                     Group {
-                        Image(systemName: "moon.stars.fill")
-                            .font(.system(size: 12))
-                            .foregroundStyle(goldColor.opacity(0.6))
-                            .position(x: center.x, y: center.y - faceRadius + 55)
+                        Image(systemName: "moon.fill")
+                            .font(.system(size: 14))
+                            .foregroundStyle(goldColor.opacity(0.8))
+                            .position(x: center.x, y: center.y - faceRadius + 58)
                         
                         Image(systemName: "sun.max.fill")
-                            .font(.system(size: 12))
-                            .foregroundStyle(.yellow.opacity(0.6))
-                            .position(x: center.x, y: center.y + faceRadius - 55)
+                            .font(.system(size: 14))
+                            .foregroundStyle(.yellow.opacity(0.8))
+                            .position(x: center.x, y: center.y + faceRadius - 58)
                     }
                     .allowsHitTesting(false)
 
@@ -281,16 +275,27 @@ struct ClockView: View {
 
                 // Hour Numbers (Minimalist)
                 if is24HourClock {
-                    ForEach([24, 6, 12, 18], id: \.self) { hour in
-                        // For 24h clock, each hour is 15 degrees. 24 is at top (0/24), 6 at right, 12 at bottom, 18 at left.
+                    ForEach(0..<12, id: \.self) { i in
+                        let hour = i * 2
+                        // For 24h clock, each hour is 15 degrees. 24 (0) is at top, 6 at right, 12 at bottom, 18 at left.
                         let angle = Angle.degrees(Double(hour) * 15 - 90)
-                        let dist = faceRadius - 28
+                        let dist = faceRadius - 32
                         let x = cos(CGFloat(angle.radians)) * dist
                         let y = sin(CGFloat(angle.radians)) * dist
                         
-                        Text("\(hour)")
-                            .font(.system(size: 16, weight: .medium, design: .serif))
-                            .foregroundStyle(goldColor.opacity(0.9))
+                        let label: String = {
+                            if hour == 0 || hour == 24 { return "12AM" }
+                            if hour == 6 { return "6AM" }
+                            if hour == 12 { return "12PM" }
+                            if hour == 18 { return "6PM" }
+                            return "\(hour % 12 == 0 ? 12 : hour % 12)"
+                        }()
+                        
+                        let isMain = hour % 6 == 0
+                        
+                        Text(label)
+                            .font(.system(size: isMain ? 14 : 15, weight: isMain ? .bold : .medium, design: .serif))
+                            .foregroundStyle(isMain ? goldColor : goldColor.opacity(0.4))
                             .position(x: center.x + x, y: center.y + y)
                     }
                 } else {
