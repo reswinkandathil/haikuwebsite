@@ -315,6 +315,15 @@ struct ClockView: View {
                 // Central Status Text & Flow State Toggle
                 if let active = activeTask {
                     let minsRemaining = active.endMinutes - Int(currentMinute)
+                    let h = minsRemaining / 60
+                    let m = minsRemaining % 60
+                    let timeLabel: String = {
+                        if h > 0 {
+                            return "\(h) hour\(h > 1 ? "s" : "")\(m > 0 ? " \(m) mins" : "") left"
+                        } else {
+                            return "\(m) mins left"
+                        }
+                    }()
                     
                     Button(action: {
                         withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
@@ -323,7 +332,7 @@ struct ClockView: View {
                         }
                     }) {
                         VStack(spacing: 4) {
-                            Text("\(minsRemaining) min left")
+                            Text(timeLabel)
                                 .font(.system(size: isFlowState ? 16 : 12, weight: .bold, design: .rounded))
                                 .foregroundStyle(active.color)
                             
