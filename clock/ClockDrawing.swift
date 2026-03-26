@@ -432,6 +432,21 @@ struct ClockView: View {
     private func handleDragChange(location: CGPoint, size: CGSize) {
         guard var drag = activeDrag, let index = tasks.firstIndex(where: { $0.id == drag.taskId }) else { return }
         
+        let center = CGPoint(x: size.width / 2, y: size.height / 2)
+        let dx = location.x - center.x
+        let dy = location.y - center.y
+        let dist = sqrt(dx*dx + dy*dy)
+        
+        // DEADZONE: If the finger is too close to the center, ignore movements.
+        // atan2 becomes extremely sensitive/unstable at the exact center.
+        if dist < 40 {
+            // Update the last angle so that when we exit the deadzone, 
+            // we don't calculate a huge delta from the entry point.
+            drag.lastMouseMinute = minute(from: location, in: size)
+            activeDrag = drag
+            return
+        }
+        
         // Calculate the raw minute based solely on angle (0...720)
         let min12h = minute(from: location, in: size)
         
