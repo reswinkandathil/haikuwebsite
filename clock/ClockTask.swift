@@ -98,6 +98,7 @@ class SharedTaskManager {
     private let key = "savedTasksByDate"
     private let is24HourKey = "is24HourClockSetting"
     private let isProKey = "isProSetting"
+    private let hasUnlockedFreeProKey = "hasUnlockedFreeProSetting"
 
     init() {
         self.userDefaults = UserDefaults(suiteName: "group.reswin.clock") ?? UserDefaults.standard
@@ -110,6 +111,14 @@ class SharedTaskManager {
 
     func loadIsPro() -> Bool {
         return userDefaults.bool(forKey: isProKey)
+    }
+    
+    func saveHasUnlockedFreePro(_ value: Bool) {
+        userDefaults.set(value, forKey: hasUnlockedFreeProKey)
+    }
+    
+    func loadHasUnlockedFreePro() -> Bool {
+        return userDefaults.bool(forKey: hasUnlockedFreeProKey)
     }
 
     func save(tasksByDate: [Date: [ClockTask]]) {        let groups = tasksByDate.map { TaskGroup(date: $0.key, tasks: $0.value) }

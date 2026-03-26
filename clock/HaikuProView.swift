@@ -126,6 +126,23 @@ struct HaikuProView: View {
                             .onAppear { storeManager.refreshOfferings() }
                     }
                     
+                    if storeManager.isSandboxMode {
+                        Button(action: { storeManager.unlockProForFree() }) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "checkmark.seal.fill")
+                                Text("FREE FOR TESTERS")
+                            }
+                            .font(.system(size: 11, weight: .bold, design: .serif))
+                            .foregroundStyle(currentTheme.accent)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(currentTheme.accent.opacity(0.1))
+                            .clipShape(Capsule())
+                        }
+                        .padding(.top, 10)
+                        .transition(.scale.combined(with: .opacity))
+                    }
+                    
                     // Footer Links
                     HStack(spacing: 24) {
                         Button("Restore") {
@@ -183,6 +200,12 @@ struct HaikuProView: View {
     }
 
     private func buyPro(_ package: Package) {
+        if storeManager.isSandboxMode {
+            print("HaikuProView: Sandbox mode detected. Unlocking for free.")
+            storeManager.unlockProForFree()
+            return
+        }
+        
         AnalyticsManager.shared.capture("purchase_initiated", properties: [
             "package_identifier": package.identifier,
             "price": package.localizedPriceString,

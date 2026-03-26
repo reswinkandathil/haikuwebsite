@@ -9,6 +9,8 @@ class StoreManager: ObservableObject {
     @Published private(set) var offerings: Offerings?
     @Published private(set) var isPro: Bool = false
     @Published private(set) var customerInfo: CustomerInfo?
+    @Published private(set) var isSandboxMode: Bool = false
+    private var hasUnlockedFreePro: Bool = false
     
     private let proEntitlementID = "Haiku  Pro"
     private var customerInfoTask: Task<Void, Never>?
@@ -16,12 +18,11 @@ class StoreManager: ObservableObject {
     init() {
         // Initialize from local cache first for instant UI response
         self.isPro = SharedTaskManager.shared.loadIsPro()
+        self.hasUnlockedFreePro = SharedTaskManager.shared.loadHasUnlockedFreePro()
         
-        // Grant TestFlight users access to Pro automatically
-        if Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt" {
-            print("RevenueCat: TestFlight/Sandbox environment detected. Granting Pro access.")
-            self.isPro = true
-            SharedTaskManager.shared.save(isPro: true)
+        // Check environment
+        Task {
+            await detectEnvironment()
         }
         
         // Then fetch fresh status from server
@@ -36,6 +37,54 @@ class StoreManager: ObservableObject {
         
         // Initial fetch of offerings
         refreshOfferings()
+    }
+    
+    private func detectEnvironment() async {
+        var detectedSandbox = false
+        
+        if #available(iOS 16.0, *) {
+            if let result = try? await AppTransaction.shared,
+               case .verified(let appTransaction) = result {
+                // .sandbox covers both Sandbox and TestFlight
+                if appTransaction.environment == .sandbox {
+                    detectedSandbox = true
+                }
+            }
+        }
+        
+        // Fallback/Double-check for older iOS or specific sandbox cases
+        if !detectedSandbox {
+            if #available(iOS 18.0, *) {
+                // On iOS 18+, we rely strictly on AppTransaction to avoid deprecation warnings
+            } else {
+                if Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt" {
+                    detectedSandbox = true
+                }
+            }
+        }
+        
+        #if DEBUG
+        detectedSandbox = true
+        #endif
+        
+        let finalDetected = detectedSandbox
+        await MainActor.run {
+            self.isSandboxMode = finalDetected
+        }
+        
+        if finalDetected {
+            print("StoreManager: Sandbox/TestFlight environment detected.")
+        }
+    }
+    
+    func unlockProForFree() {
+        guard isSandboxMode else { return }
+        print("StoreManager: Unlocking Pro for free (Sandbox mode).")
+        self.hasUnlockedFreePro = true
+        SharedTaskManager.shared.saveHasUnlockedFreePro(true)
+        self.isPro = true
+        SharedTaskManager.shared.save(isPro: true)
+        AnalyticsManager.shared.capture("purchase_completed", properties: ["method": "sandbox_free_unlock"])
     }
     
     func refreshOfferings() {
@@ -62,8 +111,8 @@ class StoreManager: ObservableObject {
         var proActive = info.entitlements[proEntitlementID]?.isActive == true
         print("RevenueCat: Checking entitlement '\(proEntitlementID)'. Active: \(proActive)")
         
-        // Keep Pro active for TestFlight/Sandbox even if RevenueCat says otherwise
-        if Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt" {
+        // Keep Pro active for TestFlight/Sandbox ONLY if they have already "unlocked" it once
+        if isSandboxMode && hasUnlockedFreePro {
             proActive = true
         }
         
