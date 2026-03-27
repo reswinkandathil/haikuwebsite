@@ -237,8 +237,8 @@ struct OnboardingStepView: View {
                     startAnimations()
                 }
             }
-            .onChange(of: isActive) { active in
-                if active {
+            .onChange(of: isActive) { oldValue, newValue in
+                if newValue {
                     startAnimations()
                 } else {
                     isAnimating = false
