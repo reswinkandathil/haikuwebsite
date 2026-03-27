@@ -19,6 +19,7 @@ struct ContentView: View {
     @StateObject private var calendarManager = CalendarManager()
     @ObservedObject private var googleCalendarManager = GoogleCalendarManager.shared
     @State private var saveDebounceTask: Task<Void, Never>? = nil
+    @State private var liveClockTasks: [ClockTask]? = nil
 
     @State private var isFlowState = false
 
@@ -34,6 +35,10 @@ struct ContentView: View {
             get: { tasksByDate[selectedDate, default: []] },
             set: { tasksByDate[selectedDate] = $0 }
         )
+    }
+
+    private var displayedTasks: [ClockTask] {
+        liveClockTasks ?? tasksByDate[selectedDate, default: []]
     }
 
     private var bgColor: Color { currentTheme.bg }
@@ -169,6 +174,7 @@ struct ContentView: View {
             AnalyticsManager.shared.capture("tab_changed", properties: ["target_tab": "\(newTab)"])
         }
         .onChange(of: selectedDate) { oldDate, newDate in
+            liveClockTasks = nil
             syncCalendar(for: newDate)
         }
         .onChange(of: tasksByDate) { oldTasks, newTasks in
@@ -576,6 +582,9 @@ struct ContentView: View {
                             calendarManager.updateTask(updatedTask, date: day)
                         }
                     }
+                },
+                onTasksPreviewUpdated: { previewTasks in
+                    liveClockTasks = previewTasks
                 }
             )
             .frame(width: 280, height: 280)
@@ -604,7 +613,7 @@ struct ContentView: View {
 
             // Task List
             Group {
-                if tasksByDate[selectedDate, default: []].isEmpty {
+                if displayedTasks.isEmpty {
                     VStack(spacing: 12) {
                         Image(systemName: "cup.and.saucer")
                             .font(.system(size: 32))
@@ -615,7 +624,7 @@ struct ContentView: View {
                     }
                 } else {
                     List {
-                        ForEach(tasksByDate[selectedDate, default: []]) { task in
+                        ForEach(displayedTasks) { task in
                             let timeString = "\(formatTime(minutes: task.startMinutes)) - \(formatTime(minutes: task.endMinutes))"
                             Button(action: {
                                 taskToEdit = task

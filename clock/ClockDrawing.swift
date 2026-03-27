@@ -8,6 +8,7 @@ struct ClockView: View {
     var is24HourClock: Bool = false
     var theme: AppTheme = .sage
     var onTaskUpdated: ((ClockTask) -> Void)? = nil
+    var onTasksPreviewUpdated: (([ClockTask]?) -> Void)? = nil
 
     // Themed Palette
     private var clockFaceColor: Color { theme.bg }
@@ -74,6 +75,7 @@ struct ClockView: View {
                             .onEnded { _ in
                                 interactiveTasks.sort { $0.startMinutes < $1.startMinutes }
                                 tasks = interactiveTasks
+                                onTasksPreviewUpdated?(nil)
 
                                 if let drag = activeDrag, let task = interactiveTasks.first(where: { $0.id == drag.taskId }) {
                                     onTaskUpdated?(task)
@@ -207,53 +209,7 @@ struct ClockView: View {
                 }
                 
                 // Scheduled Tasks
-                ForEach(interactiveTasks) { task in
-                    let taskForClock = task.normalizedForClock
-                    let isDragging = activeDrag?.taskId == task.id
-                    let isActive = activeTask?.id == task.id && !isDragging
-                    
-                    let glowRadius: CGFloat = (isActive && (pulseState || isFlowState)) ? (isFlowState ? 16 : 8) : (isDragging ? 4 : 0)
-                    let glowColor = task.color.opacity((isActive && (pulseState || isFlowState)) ? (isFlowState ? 0.6 : 0.4) : (isDragging ? 0.6 : 0))
-
-                    let frags = is24HourClock ? [TaskFragment(isAM: false, startMinutes: Double(taskForClock.startMinutes), endMinutes: Double(taskForClock.endMinutes), task: taskForClock)] : getFragments(for: taskForClock)
-                    ForEach(frags) { frag in
-                        let r = is24HourClock ? pmRingRadius : (frag.isAM ? amRingRadius : pmRingRadius)
-                        
-                        Group {
-                            if isDragging || dayStatus > 0 {
-                                // Full color for dragging or future days
-                                TaskSegmentView(start: frag.startMinutes, end: frag.endMinutes, color: task.color, opacity: 1.0, isFuture: true, glowColor: glowColor, glowRadius: glowRadius, ringWidth: ringWidth, is24HourClock: is24HourClock)
-                            } else if dayStatus < 0 {
-                                // Greyed out for past days
-                                TaskSegmentView(start: frag.startMinutes, end: frag.endMinutes, color: task.color, opacity: 0.3, isFuture: false, glowColor: glowColor, glowRadius: glowRadius, ringWidth: ringWidth, is24HourClock: is24HourClock)
-                            } else {
-                                // Today logic: split if needed
-                                let fragStart = frag.startMinutes
-                                let fragEnd = frag.endMinutes
-                                let absStart = is24HourClock ? fragStart : (frag.isAM ? fragStart : fragStart + 720)
-                                let absEnd = is24HourClock ? fragEnd : (frag.isAM ? fragEnd : fragEnd + 720)
-                                
-                                if currentMinute >= absEnd {
-                                    // Fragment entirely in the past
-                                    TaskSegmentView(start: fragStart, end: fragEnd, color: task.color, opacity: 0.3, isFuture: false, glowColor: glowColor, glowRadius: glowRadius, ringWidth: ringWidth, is24HourClock: is24HourClock)
-                                } else if currentMinute <= absStart {
-                                    // Fragment entirely in the future
-                                    TaskSegmentView(start: fragStart, end: fragEnd, color: task.color, opacity: 1.0, isFuture: true, glowColor: glowColor, glowRadius: glowRadius, ringWidth: ringWidth, is24HourClock: is24HourClock)
-                                } else {
-                                    // Fragment spans current time: SPLIT
-                                    let splitPoint = is24HourClock ? currentMinute : (frag.isAM ? currentMinute : currentMinute - 720)
-                                    
-                                    ZStack {
-                                        TaskSegmentView(start: fragStart, end: splitPoint, color: task.color, opacity: 0.3, isFuture: false, glowColor: glowColor, glowRadius: glowRadius, ringWidth: ringWidth, is24HourClock: is24HourClock)
-                                        TaskSegmentView(start: splitPoint, end: fragEnd, color: task.color, opacity: 1.0, isFuture: true, glowColor: glowColor, glowRadius: glowRadius, ringWidth: ringWidth, is24HourClock: is24HourClock)
-                                    }
-                                }
-                            }
-                        }
-                        .frame(width: r * 2, height: r * 2)
-                        .allowsHitTesting(false)
-                    }
-                }
+                scheduledTasksView(ringWidth: ringWidth, amRingRadius: amRingRadius, pmRingRadius: pmRingRadius)
 
                 // Premium Ticks (Baton markers)
                 let numTicks = is24HourClock ? 48 : 60
@@ -403,9 +359,13 @@ struct ClockView: View {
                     pulseState = true
                 }
             }
+            .onDisappear {
+                onTasksPreviewUpdated?(nil)
+            }
             .onChange(of: tasks) { _, newTasks in
                 guard activeDrag == nil else { return }
                 interactiveTasks = newTasks
+                onTasksPreviewUpdated?(nil)
             }
         }
     }
@@ -414,6 +374,79 @@ struct ClockView: View {
     private func logAnalytics(_ event: String, properties: [String: Any] = [:]) {
         // Intentionally left as a no-op. Hook up your analytics SDK here if desired.
         // print("Analytics: \(event) -> \(properties)")
+    }
+
+    @ViewBuilder
+    private func scheduledTasksView(ringWidth: CGFloat, amRingRadius: CGFloat, pmRingRadius: CGFloat) -> some View {
+        ForEach(interactiveTasks) { task in
+            scheduledFragmentsView(for: task, ringWidth: ringWidth, amRingRadius: amRingRadius, pmRingRadius: pmRingRadius)
+        }
+    }
+
+    @ViewBuilder
+    private func scheduledFragmentsView(for task: ClockTask, ringWidth: CGFloat, amRingRadius: CGFloat, pmRingRadius: CGFloat) -> some View {
+        let taskForClock = task.normalizedForClock
+        let isDragging = activeDrag?.taskId == task.id
+        let isActive = activeTask?.id == task.id && !isDragging
+        let glowRadius: CGFloat = (isActive && (pulseState || isFlowState)) ? (isFlowState ? 16 : 8) : (isDragging ? 4 : 0)
+        let glowColor = task.color.opacity((isActive && (pulseState || isFlowState)) ? (isFlowState ? 0.6 : 0.4) : (isDragging ? 0.6 : 0))
+        let fragments = is24HourClock ? [TaskFragment(id: "\(task.id.uuidString)-0", isAM: false, startMinutes: Double(taskForClock.startMinutes), endMinutes: Double(taskForClock.endMinutes), task: taskForClock)] : getFragments(for: taskForClock)
+
+        ForEach(fragments) { fragment in
+            scheduledFragmentView(
+                fragment: fragment,
+                task: task,
+                isDragging: isDragging,
+                glowColor: glowColor,
+                glowRadius: glowRadius,
+                ringWidth: ringWidth,
+                amRingRadius: amRingRadius,
+                pmRingRadius: pmRingRadius
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func scheduledFragmentView(fragment: TaskFragment, task: ClockTask, isDragging: Bool, glowColor: Color, glowRadius: CGFloat, ringWidth: CGFloat, amRingRadius: CGFloat, pmRingRadius: CGFloat) -> some View {
+        let radius = is24HourClock ? pmRingRadius : (fragment.isAM ? amRingRadius : pmRingRadius)
+
+        Group {
+            if isDragging || dayStatus > 0 {
+                TaskSegmentView(start: fragment.startMinutes, end: fragment.endMinutes, color: task.color, opacity: 1.0, isFuture: true, glowColor: glowColor, glowRadius: glowRadius, ringWidth: ringWidth, is24HourClock: is24HourClock)
+            } else if dayStatus < 0 {
+                TaskSegmentView(start: fragment.startMinutes, end: fragment.endMinutes, color: task.color, opacity: 0.3, isFuture: false, glowColor: glowColor, glowRadius: glowRadius, ringWidth: ringWidth, is24HourClock: is24HourClock)
+            } else {
+                todayFragmentView(fragment: fragment, task: task, glowColor: glowColor, glowRadius: glowRadius, ringWidth: ringWidth)
+            }
+        }
+        .frame(width: radius * 2, height: radius * 2)
+        .allowsHitTesting(false)
+        .transaction { transaction in
+            if activeDrag != nil {
+                transaction.animation = nil
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func todayFragmentView(fragment: TaskFragment, task: ClockTask, glowColor: Color, glowRadius: CGFloat, ringWidth: CGFloat) -> some View {
+        let fragmentStart = fragment.startMinutes
+        let fragmentEnd = fragment.endMinutes
+        let absoluteStart = is24HourClock ? fragmentStart : (fragment.isAM ? fragmentStart : fragmentStart + 720)
+        let absoluteEnd = is24HourClock ? fragmentEnd : (fragment.isAM ? fragmentEnd : fragmentEnd + 720)
+
+        if currentMinute >= absoluteEnd {
+            TaskSegmentView(start: fragmentStart, end: fragmentEnd, color: task.color, opacity: 0.3, isFuture: false, glowColor: glowColor, glowRadius: glowRadius, ringWidth: ringWidth, is24HourClock: is24HourClock)
+        } else if currentMinute <= absoluteStart {
+            TaskSegmentView(start: fragmentStart, end: fragmentEnd, color: task.color, opacity: 1.0, isFuture: true, glowColor: glowColor, glowRadius: glowRadius, ringWidth: ringWidth, is24HourClock: is24HourClock)
+        } else {
+            let splitPoint = is24HourClock ? currentMinute : (fragment.isAM ? currentMinute : currentMinute - 720)
+
+            ZStack {
+                TaskSegmentView(start: fragmentStart, end: splitPoint, color: task.color, opacity: 0.3, isFuture: false, glowColor: glowColor, glowRadius: glowRadius, ringWidth: ringWidth, is24HourClock: is24HourClock)
+                TaskSegmentView(start: splitPoint, end: fragmentEnd, color: task.color, opacity: 1.0, isFuture: true, glowColor: glowColor, glowRadius: glowRadius, ringWidth: ringWidth, is24HourClock: is24HourClock)
+            }
+        }
     }
     
     // MARK: - Drag Logic
@@ -599,6 +632,7 @@ struct ClockView: View {
         task.startMinutes = proposedStart
         task.endMinutes = proposedEnd
         interactiveTasks[index] = task
+        onTasksPreviewUpdated?(interactiveTasks.sorted { $0.startMinutes < $1.startMinutes })
     }
 
     private func minute(from location: CGPoint, in size: CGSize) -> Double {
@@ -827,7 +861,7 @@ struct TaskArc: Shape {
 }
 
 struct TaskFragment: Identifiable {
-    let id = UUID()
+    let id: String
     let isAM: Bool
     let startMinutes: Double
     let endMinutes: Double
@@ -839,30 +873,43 @@ func getFragments(for task: ClockTask) -> [TaskFragment] {
     let s = task.startMinutes
     let e = task.endMinutes
     
+    func appendFragment(isAM: Bool, startMinutes: Double, endMinutes: Double) {
+        let fragmentID = "\(task.id.uuidString)-\(frags.count)"
+        frags.append(
+            TaskFragment(
+                id: fragmentID,
+                isAM: isAM,
+                startMinutes: startMinutes,
+                endMinutes: endMinutes,
+                task: task
+            )
+        )
+    }
+    
     if s < 720 {
         if e <= 720 {
-            frags.append(TaskFragment(isAM: true, startMinutes: Double(s), endMinutes: Double(e), task: task))
+            appendFragment(isAM: true, startMinutes: Double(s), endMinutes: Double(e))
         } else {
-            frags.append(TaskFragment(isAM: true, startMinutes: Double(s), endMinutes: 720.0, task: task))
+            appendFragment(isAM: true, startMinutes: Double(s), endMinutes: 720.0)
             let eInPM = min(e, 1440)
-            frags.append(TaskFragment(isAM: false, startMinutes: 0.0, endMinutes: Double(eInPM) - 720.0, task: task))
+            appendFragment(isAM: false, startMinutes: 0.0, endMinutes: Double(eInPM) - 720.0)
             if e > 1440 {
                 let wrappedE = min(e - 1440, 720)
-                frags.append(TaskFragment(isAM: true, startMinutes: 0.0, endMinutes: Double(wrappedE), task: task))
+                appendFragment(isAM: true, startMinutes: 0.0, endMinutes: Double(wrappedE))
                 if e > 2160 {
-                    frags.append(TaskFragment(isAM: false, startMinutes: 0.0, endMinutes: Double(e - 2160), task: task))
+                    appendFragment(isAM: false, startMinutes: 0.0, endMinutes: Double(e - 2160))
                 }
             }
         }
     } else {
         let sInPM = max(s, 720)
         let eInPM = min(e, 1440)
-        frags.append(TaskFragment(isAM: false, startMinutes: Double(sInPM) - 720.0, endMinutes: Double(eInPM) - 720.0, task: task))
+        appendFragment(isAM: false, startMinutes: Double(sInPM) - 720.0, endMinutes: Double(eInPM) - 720.0)
         if e > 1440 {
             let wrappedE = min(e - 1440, 720)
-            frags.append(TaskFragment(isAM: true, startMinutes: 0.0, endMinutes: Double(wrappedE), task: task))
+            appendFragment(isAM: true, startMinutes: 0.0, endMinutes: Double(wrappedE))
             if e > 2160 {
-                frags.append(TaskFragment(isAM: false, startMinutes: 0.0, endMinutes: Double(e - 2160), task: task))
+                appendFragment(isAM: false, startMinutes: 0.0, endMinutes: Double(e - 2160))
             }
         }
     }
@@ -902,6 +949,7 @@ struct TaskSegmentView: View {
                 )
                 .blendMode(.overlay)
         }
+        .compositingGroup()
         .shadow(color: isFuture ? glowColor : .clear, radius: glowRadius)
     }
 }

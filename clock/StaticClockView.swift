@@ -136,7 +136,7 @@ struct StaticClockView: View {
                     let isPast = taskForClock.endMinutes <= Int(currentMinute)
                     let opacity: Double = task.isCompleted ? 0.2 : (isPast ? 0.3 : 1.0)
 
-                    let frags = is24HourClock ? [TaskFragment(isAM: false, startMinutes: Double(taskForClock.startMinutes), endMinutes: Double(taskForClock.endMinutes), task: taskForClock)] : getFragments(for: taskForClock)
+                    let frags = is24HourClock ? [TaskFragment(id: "\(task.id.uuidString)-0", isAM: false, startMinutes: Double(taskForClock.startMinutes), endMinutes: Double(taskForClock.endMinutes), task: taskForClock)] : getFragments(for: taskForClock)
                     ForEach(Array(frags.enumerated()), id: \.offset) { index, frag in
                         let r = is24HourClock ? pmRingRadius : (frag.isAM ? amRingRadius : pmRingRadius)
 
