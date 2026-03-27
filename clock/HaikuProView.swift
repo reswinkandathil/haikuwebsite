@@ -71,7 +71,7 @@ struct HaikuProView: View {
                 
                 // Pricing - Horizontal and Compact
                 VStack(spacing: 20) {
-                    if let currentOffering = storeManager.offerings?.current {
+                    if let currentOffering = storeManager.paywallOffering {
                         HStack(spacing: 10) {
                             if let monthly = currentOffering.monthly {
                                 CompactPricingButton(

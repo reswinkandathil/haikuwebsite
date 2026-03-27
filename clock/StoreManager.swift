@@ -14,7 +14,15 @@ class StoreManager: ObservableObject {
     private var hasUnlockedFreePro: Bool = false
     
     private let proEntitlementID = "Haiku Pro"
+    private let preferredOfferingID = "default"
     private var customerInfoTask: Task<Void, Never>?
+
+    var paywallOffering: Offering? {
+        if let preferred = offerings?.offering(identifier: preferredOfferingID) {
+            return preferred
+        }
+        return offerings?.current
+    }
     
     init() {
         // Initialize from local cache first for instant UI response
@@ -102,6 +110,13 @@ class StoreManager: ObservableObject {
         Task {
             do {
                 self.offerings = try await Purchases.shared.offerings()
+                if self.offerings?.offering(identifier: self.preferredOfferingID) != nil {
+                    print("RevenueCat: Using preferred offering '\(self.preferredOfferingID)'.")
+                } else if let currentID = self.offerings?.current?.identifier {
+                    print("RevenueCat: Preferred offering missing. Falling back to current offering '\(currentID)'.")
+                } else {
+                    print("RevenueCat: No available offerings returned.")
+                }
             } catch {
                 print("RevenueCat: Failed to fetch offerings: \(error)")
             }
