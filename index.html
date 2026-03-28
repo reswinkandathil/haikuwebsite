@@ -9,7 +9,7 @@
   <link rel="icon" type="image/png" href="favicon.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;family=Poppins:wght@600;700;800&amp;display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;family=Poppins:wght@600;700;800&amp;family=Playfair+Display:wght@700&amp;display=swap" rel="stylesheet" />
 
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -254,6 +254,131 @@
       width: 100%;
       height: auto;
       display: block;
+    }
+
+    .transition-section {
+      padding: 38px 0 64px;
+    }
+
+    .shift-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+      gap: 34px;
+      align-items: center;
+    }
+
+    .shift-panel {
+      background: linear-gradient(180deg, rgba(255,255,255,0.985), rgba(248,243,235,0.94));
+      border: 1px solid rgba(44, 43, 42, 0.05);
+      border-radius: 42px;
+      padding: 32px;
+      box-shadow:
+        0 32px 82px rgba(31, 24, 16, 0.07),
+        0 8px 20px rgba(31, 24, 16, 0.025),
+        inset 0 1px 0 rgba(255,255,255,0.94);
+    }
+
+    .shift-label {
+      color: rgba(44, 43, 42, 0.34);
+      font-size: 0.78rem;
+      font-weight: 800;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      margin-bottom: 20px;
+    }
+
+    .screenshot-panel {
+      display: grid;
+      gap: 0;
+    }
+
+    .phone-stage {
+      position: relative;
+      min-height: 620px;
+      padding: 30px 28px;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      border-radius: 34px;
+      background: radial-gradient(circle at 50% 14%, rgba(255,255,255,0.94) 0%, rgba(249,244,236,0.96) 44%, rgba(245,237,226,0.98) 100%);
+      border: 1px solid rgba(44, 43, 42, 0.045);
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.84),
+        inset 0 -22px 34px rgba(255,255,255,0.26);
+    }
+
+    .phone-stage::before {
+      content: "";
+      position: absolute;
+      inset: 24px;
+      border-radius: 28px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.56), rgba(255,255,255,0));
+      opacity: 0.62;
+      pointer-events: none;
+    }
+
+    .phone-stage::after {
+      content: "";
+      position: absolute;
+      left: 18%;
+      right: 18%;
+      bottom: 28px;
+      height: 44px;
+      border-radius: 999px;
+      background: radial-gradient(circle, rgba(33, 30, 26, 0.12) 0%, rgba(33, 30, 26, 0.04) 48%, transparent 74%);
+      filter: blur(16px);
+      pointer-events: none;
+    }
+
+    .phone-shot {
+      position: relative;
+      z-index: 1;
+      width: min(100%, 340px);
+      height: auto;
+      display: block;
+      filter: drop-shadow(0 30px 44px rgba(16, 14, 12, 0.18));
+    }
+
+    .traditional-shot {
+      width: min(100%, 336px);
+      transform: translateY(2px);
+    }
+
+    .clock-shot {
+      width: min(100%, 346px);
+      transform: translateY(-6px);
+    }
+
+    .shift-arrow {
+      display: grid;
+      gap: 10px;
+      justify-items: center;
+      color: var(--accent);
+    }
+
+    .shift-arrow-badge {
+      width: 68px;
+      height: 68px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,243,235,0.94));
+      border: 1px solid rgba(93,129,95,0.12);
+      box-shadow:
+        0 18px 40px rgba(31, 24, 16, 0.06),
+        inset 0 1px 0 rgba(255,255,255,0.92);
+      font-size: 1.75rem;
+      font-weight: 700;
+    }
+
+    .shift-arrow span {
+      color: rgba(44, 43, 42, 0.48);
+      font-size: 0.88rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      text-align: center;
+      max-width: 110px;
     }
 
     section.content-section {
@@ -1358,6 +1483,11 @@
       .analytics-grid { grid-template-columns: 1fr; }
       .haiku-insights-grid { grid-template-columns: 1fr; }
       .distribution-layout { grid-template-columns: 1fr; }
+      .shift-grid { grid-template-columns: 1fr; gap: 22px; }
+      .shift-arrow-badge { transform: rotate(90deg); }
+      .phone-stage { min-height: auto; padding: 24px 20px; }
+      .traditional-shot,
+      .clock-shot { width: min(100%, 320px); transform: none; }
 
       .hero {
         padding-top: 54px;
@@ -1412,6 +1542,12 @@
       .distribution-layout { gap: 22px; }
       .distribution-donut { width: 190px; }
       .window-headline { font-size: 2.2rem; }
+      .transition-section { padding: 24px 0 48px; }
+      .shift-panel { padding: 22px; border-radius: 28px; }
+      .phone-stage { padding: 20px 16px; border-radius: 24px; }
+      .phone-shot,
+      .traditional-shot,
+      .clock-shot { width: min(100%, 292px); }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -1460,6 +1596,37 @@
               <img src="assets/3phones.png" alt="Haiku app screens showing planning, insights, and weekly scheduling" />
             </div>
           </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="transition-section">
+      <div class="container">
+        <div class="section-head reveal">
+          <div class="label">See The Shift</div>
+          <h2>From stacked time blocks to one calm view</h2>
+          <p>The same plan, shown in a way that makes balance, overlap, and breathing room easier to notice.</p>
+        </div>
+
+        <div class="shift-grid reveal">
+          <article class="shift-panel screenshot-panel">
+            <div class="shift-label">Traditional calendar</div>
+            <div class="phone-stage">
+              <img src="assets/iphone-17.png" alt="Traditional time-blocked calendar view" class="phone-shot traditional-shot" />
+            </div>
+          </article>
+
+          <div class="shift-arrow" aria-hidden="true">
+            <div class="shift-arrow-badge">→</div>
+            <span>same day</span>
+          </div>
+
+          <article class="shift-panel screenshot-panel">
+            <div class="shift-label">Haiku visual calendar</div>
+            <div class="phone-stage">
+              <img src="assets/iphone-16.png" alt="Haiku clock calendar view" class="phone-shot clock-shot" />
+            </div>
+          </article>
         </div>
       </div>
     </section>
