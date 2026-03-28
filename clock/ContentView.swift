@@ -43,16 +43,6 @@ struct ContentView: View {
         liveClockTasks ?? tasksByDate[selectedDate, default: []]
     }
 
-    private var todayTasksForLiveActivity: [ClockTask] {
-        let today = Calendar.current.startOfDay(for: now)
-
-        if Calendar.current.isDate(selectedDate, inSameDayAs: today), let liveClockTasks {
-            return liveClockTasks
-        }
-
-        return tasksByDate[today, default: []]
-    }
-
     private var activeClockTask: ClockTask? {
         guard Calendar.current.isDateInToday(selectedDate) else { return nil }
         let comps = Calendar.current.dateComponents([.hour, .minute], from: now)
@@ -128,7 +118,6 @@ struct ContentView: View {
                 now = date
             }
 
-            syncLiveActivity()
         }
         .sheet(isPresented: $showingAddTask) {
             AddTaskView(tasksByDate: $tasksByDate, selectedDate: $selectedDate, prefilledTitle: prefilledTaskTitle, brainDumpTaskId: prefilledTaskId, taskToEdit: taskToEdit)
@@ -190,7 +179,6 @@ struct ContentView: View {
             SharedTaskManager.shared.save(is24HourClock: is24HourClock)
             SharedTaskManager.shared.save(theme: currentTheme)
             NotificationManager.shared.scheduleEarlyNotifications(tasksByDate: tasksByDate, offsets: notificationOffsets)
-            syncLiveActivity()
             Task {
                 await syncTasksWithCloud()
             }
@@ -201,10 +189,8 @@ struct ContentView: View {
         .onChange(of: selectedDate) { oldDate, newDate in
             liveClockTasks = nil
             syncCalendar(for: newDate)
-            syncLiveActivity()
         }
         .onChange(of: tasksByDate) { oldTasks, newTasks in
-            syncLiveActivity()
             let isCloudUpdate = isApplyingCloudSnapshot
             saveDebounceTask?.cancel()
             saveDebounceTask = Task {
@@ -220,7 +206,6 @@ struct ContentView: View {
             }
         }
         .onChange(of: scenePhase) { _, newPhase in
-            syncLiveActivity()
             guard newPhase == .active else { return }
             Task {
                 await syncTasksWithCloud()
@@ -232,14 +217,10 @@ struct ContentView: View {
         .onChange(of: is24HourClock) { oldVal, newVal in
             SharedTaskManager.shared.save(is24HourClock: newVal)
             WidgetCenter.shared.reloadAllTimelines()
-            syncLiveActivity()
         }
         .onChange(of: currentTheme) { oldVal, newVal in
             SharedTaskManager.shared.save(theme: newVal)
             WidgetCenter.shared.reloadAllTimelines()
-        }
-        .onChange(of: liveClockTasks) { _, _ in
-            syncLiveActivity()
         }
         .onChange(of: calendarManager.eventsDidChange) {
             syncCalendar(for: selectedDate)
@@ -841,14 +822,6 @@ struct ContentView: View {
         let dayOfYear = Calendar.current.ordinality(of: .day, in: .year, for: date) ?? 1
         let index = dayOfYear % quotes.count
         return quotes[index]
-    }
-
-    private func syncLiveActivity() {
-        LiveActivityManager.shared.sync(
-            tasks: todayTasksForLiveActivity,
-            now: now,
-            is24HourClock: is24HourClock
-        )
     }
 
     @MainActor

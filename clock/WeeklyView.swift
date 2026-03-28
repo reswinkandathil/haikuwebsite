@@ -23,7 +23,7 @@ struct WeeklyView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Header for week range
-            VStack(spacing: 20) {
+            VStack(spacing: 24) {
                 HStack {
                     Button(action: { changeWeek(by: -7) }) {
                         Image(systemName: "chevron.left")
@@ -84,11 +84,11 @@ struct WeeklyView: View {
                 }
                 .background(currentTheme.fieldBg)
                 .clipShape(Capsule())
-                .padding(.horizontal, 40)
+                .padding(.horizontal, 20)
             }
-            .padding(.horizontal, 24)
-            .padding(.top, 40)
-            .padding(.bottom, 20)
+            .padding(.horizontal, 20)
+            .padding(.top, 30)
+            .padding(.bottom, 28)
             
             if isCalendarLayout {
                 StandardCalendarLayout(tasksByDate: tasksByDate, displayWeek: displayWeek, currentTheme: currentTheme, is24HourClock: is24HourClock, selectedDate: $selectedDate, selectedTab: $selectedTab)
@@ -105,81 +105,95 @@ struct WeeklyView: View {
                                 let dayName = daysOfWeek[index]
                                 let dayNum = Calendar.current.component(.day, from: date)
                                 
-                                HStack(spacing: 20) {
-                                    // Left side: Day info
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(dayName)
-                                            .font(.system(size: 14, weight: .bold))
-                                            .foregroundStyle(isSelected ? currentTheme.accent : currentTheme.textForeground.opacity(0.4))
-                                        Text("\(dayNum)")
-                                            .font(.system(size: 36, weight: .light, design: .serif))
-                                            .foregroundStyle(isSelected ? currentTheme.textForeground : currentTheme.textForeground.opacity(0.8))
-                                    }
-                                    .frame(width: 50, alignment: .leading)
-                                    
-                                    // Right side: Big Clock with tasks
-                                    ZStack {
-                                        StaticClockView(now: Date(), tasks: tasks, is24HourClock: is24HourClock, theme: currentTheme, showHands: true, showText: true)
-                                            .frame(width: 168, height: 168)
-                                            .padding(4)
-                                            .background(
-                                                Circle()
-                                                    .fill(currentTheme.bg)
-                                                    .shadow(color: currentTheme.shadowDark.opacity(0.3), radius: 8, x: 4, y: 4)
-                                                    .shadow(color: currentTheme.shadowLight.opacity(0.5), radius: 8, x: -4, y: -4)
-                                            )
-                                            .overlay(
-                                                Circle()
-                                                    .stroke(isSelected ? currentTheme.accent.opacity(0.3) : Color.clear, lineWidth: 2)
-                                                    .padding(-4)
-                                            )
-                                    }
-                                    .onTapGesture {
-                                        withAnimation {
-                                            selectedDate = date
-                                            selectedTab = .clock
+                                VStack(alignment: .leading, spacing: 18) {
+                                    HStack(alignment: .firstTextBaseline) {
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text(dayName)
+                                                .font(.system(size: 14, weight: .bold))
+                                                .foregroundStyle(isSelected ? currentTheme.accent : currentTheme.textForeground.opacity(0.4))
+                                            Text("\(dayNum)")
+                                                .font(.system(size: 36, weight: .light, design: .serif))
+                                                .foregroundStyle(isSelected ? currentTheme.textForeground : currentTheme.textForeground.opacity(0.8))
+                                        }
+
+                                        Spacer()
+
+                                        if !tasks.isEmpty {
+                                            Text("\(tasks.count) task\(tasks.count == 1 ? "" : "s")")
+                                                .font(.system(size: 11, weight: .bold, design: .rounded))
+                                                .foregroundStyle(currentTheme.accent.opacity(0.8))
+                                                .padding(.horizontal, 10)
+                                                .padding(.vertical, 6)
+                                                .background(
+                                                    Capsule()
+                                                        .fill(currentTheme.fieldBg.opacity(0.85))
+                                                )
                                         }
                                     }
-                                    
-                                    Spacer()
-                                    
-                                    // Task summary
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        if !tasks.isEmpty {
-                                            ForEach(tasks.prefix(4)) { task in
-                                                HStack(alignment: .center, spacing: 8) {
+
+                                    HStack(alignment: .center, spacing: 18) {
+                                        ZStack {
+                                            StaticClockView(now: Date(), tasks: tasks, is24HourClock: is24HourClock, theme: currentTheme, showHands: true, showText: true)
+                                                .frame(width: 146, height: 146)
+                                                .padding(4)
+                                                .background(
                                                     Circle()
-                                                        .fill(task.color)
-                                                        .frame(width: 8, height: 8)
-                                                    
-                                                    VStack(alignment: .leading, spacing: 2) {
-                                                        Text(task.title)
-                                                            .font(.system(size: 12, weight: .medium, design: .serif))
-                                                            .foregroundStyle(currentTheme.textForeground)
-                                                            .lineLimit(1)
-                                                        
-                                                        Text("\(formatTime(task.startMinutes)) - \(formatTime(task.endMinutes))")
-                                                            .font(.system(size: 10, weight: .medium, design: .rounded))
-                                                            .foregroundStyle(currentTheme.textForeground.opacity(0.55))
-                                                            .lineLimit(1)
+                                                        .fill(currentTheme.bg)
+                                                        .shadow(color: currentTheme.shadowDark.opacity(0.3), radius: 8, x: 4, y: 4)
+                                                        .shadow(color: currentTheme.shadowLight.opacity(0.5), radius: 8, x: -4, y: -4)
+                                                )
+                                                .overlay(
+                                                    Circle()
+                                                        .stroke(isSelected ? currentTheme.accent.opacity(0.3) : Color.clear, lineWidth: 2)
+                                                        .padding(-4)
+                                                )
+                                        }
+                                        .onTapGesture {
+                                            withAnimation {
+                                                selectedDate = date
+                                                selectedTab = .clock
+                                            }
+                                        }
+
+                                        VStack(alignment: .leading, spacing: 10) {
+                                            if !tasks.isEmpty {
+                                                ForEach(tasks.prefix(3)) { task in
+                                                    HStack(alignment: .top, spacing: 8) {
+                                                        Circle()
+                                                            .fill(task.color)
+                                                            .frame(width: 8, height: 8)
+                                                            .padding(.top, 4)
+
+                                                        VStack(alignment: .leading, spacing: 2) {
+                                                            Text(task.title)
+                                                                .font(.system(size: 12, weight: .medium, design: .serif))
+                                                                .foregroundStyle(currentTheme.textForeground)
+                                                                .lineLimit(2)
+
+                                                            Text("\(formatTime(task.startMinutes)) - \(formatTime(task.endMinutes))")
+                                                                .font(.system(size: 10, weight: .medium, design: .rounded))
+                                                                .foregroundStyle(currentTheme.textForeground.opacity(0.55))
+                                                                .lineLimit(1)
+                                                        }
                                                     }
                                                 }
+
+                                                if tasks.count > 3 {
+                                                    Text("+\(tasks.count - 3) more")
+                                                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                                                        .foregroundStyle(currentTheme.accent.opacity(0.75))
+                                                }
+                                            } else {
+                                                Text("Open day")
+                                                    .font(.system(size: 12, weight: .medium, design: .serif))
+                                                    .foregroundStyle(currentTheme.textForeground.opacity(0.35))
                                             }
-                                            if tasks.count > 4 {
-                                                Text("+\(tasks.count - 4)")
-                                                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                                                    .foregroundStyle(currentTheme.accent.opacity(0.75))
-                                            }
-                                        } else {
-                                            Text("Open day")
-                                                .font(.system(size: 11, weight: .medium, design: .serif))
-                                                .foregroundStyle(currentTheme.textForeground.opacity(0.35))
                                         }
+                                        .frame(maxWidth: .infinity, alignment: .leading)
                                     }
-                                    .frame(width: 120, alignment: .leading)
                                 }
-                                .padding(.vertical, 20)
-                                .padding(.horizontal, 20)
+                                .padding(.vertical, 22)
+                                .padding(.horizontal, 18)
                                 .background(
                                     RoundedRectangle(cornerRadius: 32)
                                         .fill(isSelected ? currentTheme.fieldBg.opacity(0.3) : Color.clear)
@@ -187,6 +201,7 @@ struct WeeklyView: View {
                             }
                         }
                     }
+                    .padding(.horizontal, 20)
                     .padding(.bottom, 40)
                 }
             }
