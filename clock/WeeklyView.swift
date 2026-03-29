@@ -263,7 +263,9 @@ struct WeeklyView: View {
         let minute = minutes % 60
         let date = Calendar.current.date(from: DateComponents(hour: hour, minute: minute)) ?? Date()
         let formatter = DateFormatter()
-        formatter.dateFormat = is24HourClock ? "HH:mm" : "h:mm a"
+        formatter.amSymbol = "am"
+        formatter.pmSymbol = "pm"
+        formatter.dateFormat = minute == 0 ? "h a" : "h:mm a"
         return formatter.string(from: date)
     }
 }

@@ -12,16 +12,7 @@ struct TodoView: View {
         case completed = "Done"
     }
     @State private var selectedFilter: Filter = .active
-    
-    enum DoneFilter: String, CaseIterable {
-        case all = "All"
-        case daily = "Daily"
-        case weekly = "Weekly"
-    }
-    @State private var selectedDoneFilter: DoneFilter = .all
-    
-    @State private var taskJustCompletedIds = Set<UUID>()
-    
+
     @State private var showingClearAlert = false
     
     // Selection for scheduling
@@ -34,36 +25,19 @@ struct TodoView: View {
     private var goldColor: Color { currentTheme.accent }
 
     var filteredTasks: [BrainDumpTask] {
+        let cal = Calendar.current
+
         switch selectedFilter {
         case .active:
-            return brainDumpManager.tasks.filter { !$0.isCompleted || taskJustCompletedIds.contains($0.id) }
+            return brainDumpManager.tasks.filter { task in
+                guard task.isCompleted else { return true }
+                guard let completedDate = task.completedDate else { return false }
+                return cal.isDateInToday(completedDate)
+            }
         case .completed:
-            let completed = brainDumpManager.tasks.filter { $0.isCompleted && !taskJustCompletedIds.contains($0.id) }
-            let cal = Calendar.current
-            let now = Date()
-            
-            switch selectedDoneFilter {
-            case .all:
-                // Show everything older than this week
-                return completed.filter { task in
-                    guard let date = task.completedDate else { return false }
-                    return !cal.isDate(date, equalTo: now, toGranularity: .weekOfYear) ||
-                           !cal.isDate(date, equalTo: now, toGranularity: .yearForWeekOfYear)
-                }
-            case .daily:
-                // Show only today
-                return completed.filter { task in
-                    guard let date = task.completedDate else { return false }
-                    return cal.isDateInToday(date)
-                }
-            case .weekly:
-                // Show this week, but exclude today (so they "moved" here)
-                return completed.filter { task in
-                    guard let date = task.completedDate else { return false }
-                    let isThisWeek = cal.isDate(date, equalTo: now, toGranularity: .weekOfYear) &&
-                                     cal.isDate(date, equalTo: now, toGranularity: .yearForWeekOfYear)
-                    return isThisWeek && !cal.isDateInToday(date)
-                }
+            return brainDumpManager.tasks.filter { task in
+                guard task.isCompleted, let completedDate = task.completedDate else { return false }
+                return !cal.isDateInToday(completedDate)
             }
         }
     }
@@ -104,59 +78,35 @@ struct TodoView: View {
                 .padding(.horizontal, 40)
                 .padding(.bottom, 12)
 
-                // Sub-Filter for Done tab
                 if selectedFilter == .completed {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 12) {
-                            ForEach(DoneFilter.allCases, id: \.self) { df in
-                                Button(action: {
-                                    AnalyticsManager.shared.capture("brain_dump_done_filter_changed", properties: ["filter": df.rawValue])
-                                    withAnimation(.snappy) {
-                                        selectedDoneFilter = df
-                                    }
-                                }) {                                    Text(df.rawValue.uppercased())
-                                        .font(.system(size: 10, weight: selectedDoneFilter == df ? .bold : .medium, design: .serif))
-                                        .foregroundStyle(selectedDoneFilter == df ? goldColor : currentTheme.textForeground.opacity(0.4))
-                                        .padding(.horizontal, 16)
-                                        .padding(.vertical, 8)
-                                        .background(
-                                            ZStack {
-                                                Capsule()
-                                                    .fill(selectedDoneFilter == df ? goldColor.opacity(0.1) : Color.clear)
-                                                Capsule()
-                                                    .stroke(selectedDoneFilter == df ? goldColor.opacity(0.3) : currentTheme.textForeground.opacity(0.1), lineWidth: 1)
-                                            }
-                                        )
+                    HStack {
+                        Text("Completed before today")
+                            .font(.system(size: 10, weight: .medium, design: .serif))
+                            .foregroundStyle(currentTheme.textForeground.opacity(0.45))
+                            .tracking(1)
+
+                        Spacer()
+
+                        if !filteredTasks.isEmpty {
+                            Button(action: { showingClearAlert = true }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "trash")
+                                        .font(.system(size: 10))
+                                    Text("CLEAR")
+                                        .font(.system(size: 10, weight: .bold, design: .serif))
                                 }
-                                .buttonStyle(.plain)
+                                .foregroundStyle(Color.red.opacity(0.7))
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                                .background(
+                                    Capsule()
+                                        .stroke(Color.red.opacity(0.2), lineWidth: 1)
+                                )
                             }
-                            
-                            if !filteredTasks.isEmpty {
-                                Rectangle()
-                                    .fill(currentTheme.textForeground.opacity(0.1))
-                                    .frame(width: 1, height: 20)
-                                    .padding(.horizontal, 4)
-                                
-                                Button(action: { showingClearAlert = true }) {
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "trash")
-                                            .font(.system(size: 10))
-                                        Text("CLEAR")
-                                            .font(.system(size: 10, weight: .bold, design: .serif))
-                                    }
-                                    .foregroundStyle(Color.red.opacity(0.7))
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 8)
-                                    .background(
-                                        Capsule()
-                                            .stroke(Color.red.opacity(0.2), lineWidth: 1)
-                                    )
-                                }
-                                .buttonStyle(.plain)
-                            }
+                            .buttonStyle(.plain)
                         }
-                        .padding(.horizontal, 40)
                     }
+                    .padding(.horizontal, 40)
                     .padding(.bottom, 20)
                     .transition(.move(edge: .top).combined(with: .opacity))
                 }
@@ -203,7 +153,7 @@ struct TodoView: View {
                         Image(systemName: selectedFilter == .active ? "brain.head.profile" : "checkmark.seal")
                             .font(.system(size: 32))
                             .foregroundStyle(goldColor.opacity(0.5) as Color)
-                        Text(selectedFilter == .active ? "Clear your mind" : "No tasks in \(selectedDoneFilter.rawValue)")
+                        Text(selectedFilter == .active ? "Clear your mind" : "No completed tasks yet")
                             .font(.system(size: 14, weight: .light))
                             .foregroundStyle(currentTheme.textForeground.opacity(0.5) as Color)
                     }
@@ -240,19 +190,9 @@ struct TodoView: View {
                                             let nowCompleted = brainDumpManager.tasks[index].isCompleted
                                             
                                             if !wasCompleted && nowCompleted {
-                                                // Task was just marked as completed
                                                 AnalyticsManager.shared.capture("brain_dump_task_completed")
-                                                taskJustCompletedIds.insert(task.id) 
                                                 UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
-                                                
-                                                // After 1.2s, move it to the completed list (remove from the active view)
-                                                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                                                    withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                                                        _ = taskJustCompletedIds.remove(task.id)
-                                                    }
-                                                }
                                             } else if wasCompleted && !nowCompleted {
-                                                // Task was marked as active again
                                                 AnalyticsManager.shared.capture("brain_dump_task_reactivated")
                                                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                                             }
@@ -344,14 +284,14 @@ struct TodoView: View {
         .sheet(isPresented: $showingBulkImport) {
             BulkImportView(isPresented: $showingBulkImport, manager: brainDumpManager)
         }
-        .alert("Clear \(selectedDoneFilter.rawValue) Tasks?", isPresented: $showingClearAlert) {
+        .alert("Clear Done Tasks?", isPresented: $showingClearAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Clear", role: .destructive) {
-                AnalyticsManager.shared.capture("brain_dump_list_cleared", properties: ["filter": selectedDoneFilter.rawValue])
+                AnalyticsManager.shared.capture("brain_dump_list_cleared", properties: ["filter": "Done"])
                 clearCurrentFilter()
             }
         } message: {
-            Text("Are you sure you want to clear your \(selectedDoneFilter.rawValue.lowercased()) list? This action cannot be undone.")
+            Text("Are you sure you want to clear your done list? This action cannot be undone.")
         }
     }
     
