@@ -155,7 +155,9 @@ private struct WidgetTaskContext {
 
     private var formattedCurrentTime: String {
         let formatter = DateFormatter()
-        formatter.dateFormat = is24HourClock ? "HH:mm" : "h:mm"
+        formatter.amSymbol = "am"
+        formatter.pmSymbol = "pm"
+        formatter.dateFormat = "h:mm"
         return formatter.string(from: Date())
     }
 
@@ -164,7 +166,9 @@ private struct WidgetTaskContext {
         let minute = minutes % 60
         let date = Calendar.current.date(from: DateComponents(hour: hour, minute: minute)) ?? Date()
         let formatter = DateFormatter()
-        formatter.dateFormat = is24HourClock ? "HH:mm" : "h:mm a"
+        formatter.amSymbol = "am"
+        formatter.pmSymbol = "pm"
+        formatter.dateFormat = "h:mm a"
         return formatter.string(from: date)
     }
 }
@@ -291,13 +295,14 @@ struct clockWidgetEntryView : View {
     }
 
     private func formatTime(minutes: Int) -> String {
-        let is24Hour = fetchIs24HourClock()
         let h = minutes / 60
         let m = minutes % 60
         
         let date = Calendar.current.date(from: DateComponents(hour: h, minute: m)) ?? Date()
         let formatter = DateFormatter()
-        formatter.dateFormat = is24Hour ? "HH:mm" : "h:mm a"
+        formatter.amSymbol = "am"
+        formatter.pmSymbol = "pm"
+        formatter.dateFormat = "h:mm a"
         return formatter.string(from: date)
     }
 
