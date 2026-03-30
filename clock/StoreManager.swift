@@ -7,6 +7,7 @@ internal import Combine
 @MainActor
 class StoreManager: ObservableObject {
     @Published private(set) var offerings: Offerings?
+    @Published private(set) var lastError: Error?
     @Published private(set) var isPro: Bool = false
     @Published private(set) var customerInfo: CustomerInfo?
     @Published private(set) var isSandboxMode: Bool = false
@@ -116,6 +117,7 @@ class StoreManager: ObservableObject {
         }
 
         Task {
+            self.lastError = nil
             do {
                 self.offerings = try await Purchases.shared.offerings()
                 if self.offerings?.offering(identifier: self.preferredOfferingID) != nil {
@@ -127,6 +129,7 @@ class StoreManager: ObservableObject {
                 }
             } catch {
                 print("RevenueCat: Failed to fetch offerings: \(error)")
+                self.lastError = error
             }
         }
     }

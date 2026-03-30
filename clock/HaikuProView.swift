@@ -135,9 +135,49 @@ struct HaikuProView: View {
                         }
                         .padding(.horizontal, 32)
                     } else {
-                        ProgressView()
-                            .tint(currentTheme.accent)
-                            .onAppear { storeManager.refreshOfferings() }
+                        VStack(spacing: 16) {
+                            if storeManager.lastError != nil {
+                                Image(systemName: "exclamationmark.circle.fill")
+                                    .font(.system(size: 24))
+                                    .foregroundStyle(currentTheme.accent)
+                                
+                                Text("Could not load products.")
+                                    .font(.system(size: 14, weight: .semibold, design: .serif))
+                                    .foregroundStyle(currentTheme.textForeground)
+                                
+                                Text("Please check your internet connection and try again.")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(currentTheme.textForeground.opacity(0.6))
+                                    .multilineTextAlignment(.center)
+                                    .padding(.horizontal, 40)
+                                
+                                Button(action: { storeManager.refreshOfferings() }) {
+                                    Text("Retry")
+                                        .font(.system(size: 13, weight: .medium, design: .serif))
+                                        .foregroundStyle(currentTheme.accent)
+                                        .padding(.horizontal, 16)
+                                        .padding(.vertical, 8)
+                                        .background(currentTheme.accent.opacity(0.1))
+                                        .clipShape(Capsule())
+                                }
+                            } else {
+                                ProgressView()
+                                    .tint(currentTheme.accent)
+                                
+                                Text("Syncing with App Store...")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(currentTheme.textForeground.opacity(0.4))
+                                    .padding(.top, 8)
+                                    .onAppear {
+                                        // Auto-refresh after a timeout if it stays stuck
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 8.0) {
+                                            if storeManager.paywallOffering == nil && storeManager.lastError == nil {
+                                                storeManager.refreshOfferings()
+                                            }
+                                        }
+                                    }
+                            }
+                        }
                     }
                     
                     if storeManager.allowsTesterUnlocks {
