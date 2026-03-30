@@ -31,6 +31,13 @@ struct ProfileSettingsView: View {
         if notificationOffsetsData.isEmpty { return [] }
         return notificationOffsetsData.split(separator: ",").compactMap { Int($0) }
     }
+
+    private var uses12HourClock: Binding<Bool> {
+        Binding(
+            get: { !is24HourClock },
+            set: { is24HourClock = !$0 }
+        )
+    }
     
     private func toggleOffset(_ offset: Int) {
         var current = Set(offsets)
@@ -78,7 +85,7 @@ struct ProfileSettingsView: View {
                 }
 
                 VStack(spacing: 20) {
-                    Toggle("24-Hour Clock", isOn: $is24HourClock)
+                    Toggle("12-Hour Clock", isOn: uses12HourClock)
                         .font(.system(size: 16, weight: .medium, design: .serif))
                         .foregroundStyle(currentTheme.textForeground.opacity(0.9))
                         .padding()

@@ -192,6 +192,9 @@ class SharedTaskManager {
     }
 
     func loadIs24HourClock() -> Bool {
+        if userDefaults.object(forKey: is24HourKey) == nil {
+            return true
+        }
         return userDefaults.bool(forKey: is24HourKey)
     }
 

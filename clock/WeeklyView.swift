@@ -2,7 +2,7 @@ import SwiftUI
 
 struct WeeklyView: View {
     @AppStorage("appTheme") private var currentTheme: AppTheme = .sage
-    @AppStorage("is24HourClock") private var is24HourClock = false
+    @AppStorage("is24HourClock") private var is24HourClock = true
     @State private var isCalendarLayout = false
     
     var tasksByDate: [Date: [ClockTask]]

@@ -66,7 +66,7 @@ struct ContentView: View {
     @State private var taskToEdit: ClockTask? = nil
     @State private var deletedExternalIds = Set<String>()
     @State private var clockFrame: CGRect = .zero
-    @AppStorage("is24HourClock") private var is24HourClock = false
+    @AppStorage("is24HourClock") private var is24HourClock = true
     @AppStorage("notificationOffsetsData") private var notificationOffsetsData = ""
 
     private var notificationOffsets: [Int] {
