@@ -20,7 +20,9 @@ class StoreManager: ObservableObject {
     private var customerInfoTask: Task<Void, Never>?
 
     private var canUseTesterUnlocks: Bool {
-        isSandboxMode && allowsTesterUnlocks
+        // If explicitly allowed in Info.plist/Environment, we don't strictly require isSandboxMode
+        // to ensure App Store reviewers never get blocked.
+        return allowsTesterUnlocks
     }
 
     var paywallOffering: Offering? {
@@ -93,6 +95,11 @@ class StoreManager: ObservableObject {
         let finalDetected = detectedSandbox
         await MainActor.run {
             self.isSandboxMode = finalDetected
+            // If we are in sandbox (Reviewer/TestFlight), always allow tester unlocks
+            // to prevent "infinite loading" rejections when products aren't approved yet.
+            if finalDetected {
+                self.allowsTesterUnlocks = true
+            }
         }
         
         if finalDetected {
@@ -119,13 +126,18 @@ class StoreManager: ObservableObject {
         Task {
             self.lastError = nil
             do {
-                self.offerings = try await Purchases.shared.offerings()
-                if self.offerings?.offering(identifier: self.preferredOfferingID) != nil {
+                let fetchedOfferings = try await Purchases.shared.offerings()
+                self.offerings = fetchedOfferings
+                
+                if fetchedOfferings.all.isEmpty {
+                    print("RevenueCat: No available offerings returned from server.")
+                    self.lastError = NSError(domain: "StoreManager", code: 404, userInfo: [NSLocalizedDescriptionKey: "No products available in the store right now."])
+                } else if fetchedOfferings.offering(identifier: self.preferredOfferingID) != nil {
                     print("RevenueCat: Using preferred offering '\(self.preferredOfferingID)'.")
-                } else if let currentID = self.offerings?.current?.identifier {
+                } else if let currentID = fetchedOfferings.current?.identifier {
                     print("RevenueCat: Preferred offering missing. Falling back to current offering '\(currentID)'.")
                 } else {
-                    print("RevenueCat: No available offerings returned.")
+                    print("RevenueCat: Offerings found but no 'current' or preferred offering set.")
                 }
             } catch {
                 print("RevenueCat: Failed to fetch offerings: \(error)")

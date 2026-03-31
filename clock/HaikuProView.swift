@@ -120,6 +120,38 @@ struct HaikuProView: View {
                         .padding(.horizontal, 20)
                         .opacity(appearanceAnimate ? 1 : 0)
                         .scaleEffect(appearanceAnimate ? 1 : 0.95)
+                    } else if storeManager.isSandboxMode && storeManager.paywallOffering == nil {
+                        VStack(spacing: 16) {
+                            Image(systemName: "wrench.and.screwdriver.fill")
+                                .font(.system(size: 24))
+                                .foregroundStyle(currentTheme.accent)
+                            
+                            Text("Reviewer / Sandbox Mode")
+                                .font(.system(size: 14, weight: .semibold, design: .serif))
+                                .foregroundStyle(currentTheme.textForeground)
+                            
+                            Text("Products are still being approved. Use the free unlock below to test Pro features.")
+                                .font(.system(size: 11))
+                                .foregroundStyle(currentTheme.textForeground.opacity(0.6))
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 40)
+                            
+                            Button(action: { 
+                                AnalyticsManager.shared.capture("testflight_free_unlock_clicked")
+                                storeManager.unlockProForFree() 
+                            }) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "checkmark.seal.fill")
+                                    Text("UNLOCK FOR FREE (REVIEWER)")
+                                }
+                                .font(.system(size: 13, weight: .bold, design: .serif))
+                                .foregroundStyle(currentTheme.accent)
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 10)
+                                .background(currentTheme.accent.opacity(0.1))
+                                .clipShape(Capsule())
+                            }
+                        }
                     } else if !storeManager.isRevenueCatConfigured {
                         VStack(spacing: 8) {
                             Image(systemName: storeManager.allowsTesterUnlocks ? "wrench.and.screwdriver.fill" : "exclamationmark.triangle.fill")
@@ -178,26 +210,6 @@ struct HaikuProView: View {
                                     }
                             }
                         }
-                    }
-                    
-                    if storeManager.allowsTesterUnlocks {
-                        Button(action: { 
-                            AnalyticsManager.shared.capture("testflight_free_unlock_clicked")
-                            storeManager.unlockProForFree() 
-                        }) {
-                            HStack(spacing: 8) {
-                                Image(systemName: "checkmark.seal.fill")
-                                Text("FREE FOR TESTERS")
-                            }
-                            .font(.system(size: 11, weight: .bold, design: .serif))
-                            .foregroundStyle(currentTheme.accent)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
-                            .background(currentTheme.accent.opacity(0.1))
-                            .clipShape(Capsule())
-                        }
-                        .padding(.top, 10)
-                        .transition(.scale.combined(with: .opacity))
                     }
                     
                     // Footer Links
