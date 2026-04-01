@@ -69,7 +69,7 @@ struct HaikuProView: View {
                                 .font(.system(size: 10))
                                 .foregroundStyle(currentTheme.accent)
                         }
-                        Text("4.8 · 2,400+ ratings")
+                        Text("Loved by intentional planners")
                             .font(.system(size: 12, design: .serif))
                             .foregroundStyle(currentTheme.textForeground.opacity(0.45))
                     }
