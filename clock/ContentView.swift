@@ -150,6 +150,7 @@ struct ContentView: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbarBackground(currentTheme.bg, for: .navigationBar)
                 .toolbarBackground(.visible, for: .navigationBar)
+                .toolbarColorScheme(currentTheme == .sakura ? .light : .dark, for: .navigationBar)
                 .toolbar {
                     ToolbarItem(placement: .principal) {
                         Text("Select Date")

@@ -157,7 +157,7 @@ struct NewCategoryView: View {
             .navigationTitle("New Category")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(theme.bg, for: .navigationBar)
-            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbarColorScheme(theme == .sakura ? .light : .dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }

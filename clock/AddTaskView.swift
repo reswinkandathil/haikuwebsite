@@ -203,6 +203,7 @@ struct AddTaskView: View {
                                 .tracking(1)
                             
                             DatePicker("Date", selection: $taskDate, displayedComponents: .date)
+                                .colorMultiply(currentTheme == .sakura ? currentTheme.textForeground : .white)
                                 .padding()
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
@@ -221,6 +222,7 @@ struct AddTaskView: View {
                             
                             VStack(spacing: 0) {
                                 DatePicker("Start", selection: $startTime, displayedComponents: .hourAndMinute)
+                                    .colorMultiply(currentTheme == .sakura ? currentTheme.textForeground : .white)
                                     .padding()
                                     .foregroundStyle(currentTheme.textForeground.opacity(0.9))
                                 
@@ -230,6 +232,7 @@ struct AddTaskView: View {
                                     .padding(.horizontal)
                                 
                                 DatePicker("End", selection: $endTime, displayedComponents: .hourAndMinute)
+                                    .colorMultiply(currentTheme == .sakura ? currentTheme.textForeground : .white)
                                     .padding()
                                     .foregroundStyle(currentTheme.textForeground.opacity(0.9))
                             }
@@ -260,7 +263,7 @@ struct AddTaskView: View {
                         Button(action: saveTask) {
                             Text(taskToEdit == nil ? "Schedule Task" : "Update Task")
                                 .font(.system(size: 16, weight: .bold, design: .serif))
-                                .foregroundStyle(requiresCategorySelection ? goldColor.opacity(0.3) : bgColor)
+                                .foregroundStyle(requiresCategorySelection ? goldColor.opacity(0.3) : (currentTheme == .sakura ? currentTheme.textForeground : bgColor))
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 18)
                                 .background(
@@ -283,7 +286,7 @@ struct AddTaskView: View {
             .navigationTitle(taskToEdit == nil ? "New Task" : "Edit Task")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(bgColor, for: .navigationBar)
-            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbarColorScheme(currentTheme == .sakura ? .light : .dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close") { dismiss() }
