@@ -67,6 +67,73 @@ struct AddTaskView: View {
             VStack(spacing: 0) {
                 ScrollView {
                     VStack(spacing: 32) {
+                        // Title Input
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("TASK NAME")
+                                .font(.system(size: 12, weight: .regular, design: .serif))
+                                .foregroundStyle(goldColor)
+                                .tracking(1)
+                            
+                            TextField("Enter title...", text: $title)
+                                .font(.system(size: 16, weight: .regular))
+                                .foregroundStyle(currentTheme.textForeground)
+                                .padding()
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(fieldBgColor)
+                                        .shadow(color: shadowDark, radius: 5, x: 4, y: 4)
+                                        .shadow(color: shadowLight, radius: 5, x: -4, y: -4)
+                                )
+                        }
+                        
+                        // Date Selection
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("DATE")
+                                .font(.system(size: 12, weight: .regular, design: .serif))
+                                .foregroundStyle(goldColor)
+                                .tracking(1)
+                            
+                            DatePicker("Date", selection: $taskDate, displayedComponents: .date)
+                                .colorMultiply(currentTheme == .sakura ? currentTheme.textForeground : .white)
+                                .padding()
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(fieldBgColor)
+                                        .shadow(color: shadowDark, radius: 5, x: 4, y: 4)
+                                        .shadow(color: shadowLight, radius: 5, x: -4, y: -4)
+                                )
+                        }
+
+                        // Time Selection
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("SCHEDULE")
+                                .font(.system(size: 12, weight: .regular, design: .serif))
+                                .foregroundStyle(goldColor)
+                                .tracking(1)
+                            
+                            VStack(spacing: 0) {
+                                DatePicker("Start", selection: $startTime, displayedComponents: .hourAndMinute)
+                                    .colorMultiply(currentTheme == .sakura ? currentTheme.textForeground : .white)
+                                    .padding()
+                                    .foregroundStyle(currentTheme.textForeground.opacity(0.9))
+                                
+                                Rectangle()
+                                    .fill(currentTheme.textForeground.opacity(0.1))
+                                    .frame(height: 1)
+                                    .padding(.horizontal)
+                                
+                                DatePicker("End", selection: $endTime, displayedComponents: .hourAndMinute)
+                                    .colorMultiply(currentTheme == .sakura ? currentTheme.textForeground : .white)
+                                    .padding()
+                                    .foregroundStyle(currentTheme.textForeground.opacity(0.9))
+                            }
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(fieldBgColor)
+                                    .shadow(color: shadowDark, radius: 5, x: 4, y: 4)
+                                    .shadow(color: shadowLight, radius: 5, x: -4, y: -4)
+                            )
+                        }
                         // Categories
                         VStack(alignment: .leading, spacing: 12) {
                             Text("CATEGORIES")
@@ -176,73 +243,6 @@ struct AddTaskView: View {
                             }
                         }
 
-                        // Title Input
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("TASK NAME")
-                                .font(.system(size: 12, weight: .regular, design: .serif))
-                                .foregroundStyle(goldColor)
-                                .tracking(1)
-                            
-                            TextField("Enter title...", text: $title)
-                                .font(.system(size: 16, weight: .regular))
-                                .foregroundStyle(currentTheme.textForeground)
-                                .padding()
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(fieldBgColor)
-                                        .shadow(color: shadowDark, radius: 5, x: 4, y: 4)
-                                        .shadow(color: shadowLight, radius: 5, x: -4, y: -4)
-                                )
-                        }
-                        
-                        // Date Selection
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("DATE")
-                                .font(.system(size: 12, weight: .regular, design: .serif))
-                                .foregroundStyle(goldColor)
-                                .tracking(1)
-                            
-                            DatePicker("Date", selection: $taskDate, displayedComponents: .date)
-                                .colorMultiply(currentTheme == .sakura ? currentTheme.textForeground : .white)
-                                .padding()
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(fieldBgColor)
-                                        .shadow(color: shadowDark, radius: 5, x: 4, y: 4)
-                                        .shadow(color: shadowLight, radius: 5, x: -4, y: -4)
-                                )
-                        }
-
-                        // Time Selection
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("SCHEDULE")
-                                .font(.system(size: 12, weight: .regular, design: .serif))
-                                .foregroundStyle(goldColor)
-                                .tracking(1)
-                            
-                            VStack(spacing: 0) {
-                                DatePicker("Start", selection: $startTime, displayedComponents: .hourAndMinute)
-                                    .colorMultiply(currentTheme == .sakura ? currentTheme.textForeground : .white)
-                                    .padding()
-                                    .foregroundStyle(currentTheme.textForeground.opacity(0.9))
-                                
-                                Rectangle()
-                                    .fill(currentTheme.textForeground.opacity(0.1))
-                                    .frame(height: 1)
-                                    .padding(.horizontal)
-                                
-                                DatePicker("End", selection: $endTime, displayedComponents: .hourAndMinute)
-                                    .colorMultiply(currentTheme == .sakura ? currentTheme.textForeground : .white)
-                                    .padding()
-                                    .foregroundStyle(currentTheme.textForeground.opacity(0.9))
-                            }
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(fieldBgColor)
-                                    .shadow(color: shadowDark, radius: 5, x: 4, y: 4)
-                                    .shadow(color: shadowLight, radius: 5, x: -4, y: -4)
-                            )
-                        }
                     }
                     .padding(32)
                 }
