@@ -76,6 +76,7 @@ struct ContentView: View {
 
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @AppStorage("hasSeenTutorial") private var hasSeenTutorial = false
+    @AppStorage("hasSeenTwelveHourTutorial") private var hasSeenTwelveHourTutorial = false
     @State private var showingTutorial = false
 
     var body: some View {
@@ -217,6 +218,13 @@ struct ContentView: View {
         .onChange(of: is24HourClock) { oldVal, newVal in
             SharedTaskManager.shared.save(is24HourClock: newVal)
             WidgetCenter.shared.reloadAllTimelines()
+            // Show the 12-hour ring tutorial the first time user switches to 12h mode
+            if !newVal && !hasSeenTwelveHourTutorial {
+                withAnimation(.easeInOut(duration: 0.4)) {
+                    hasSeenTwelveHourTutorial = true
+                    showingTutorial = true
+                }
+            }
         }
         .onChange(of: currentTheme) { oldVal, newVal in
             SharedTaskManager.shared.save(theme: newVal)
