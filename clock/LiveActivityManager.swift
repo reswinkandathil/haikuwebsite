@@ -165,6 +165,10 @@ final class LiveActivityManager {
                 content: content,
                 pushType: nil
             )
+            AnalyticsManager.shared.capture("live_activity_shown", properties: [
+                "minutes_until_start": snapshot.state.minutesUntilStart,
+                "task_title": snapshot.state.taskTitle
+            ])
         } catch {
             print("LiveActivity: Failed to request activity: \(error.localizedDescription)")
         }

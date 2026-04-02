@@ -18,7 +18,7 @@
 	<key>PostHogHost</key>
 	<string>https://us.i.posthog.com</string>
 	<key>PostHogProjectToken</key>
-	<string>phc_3hRgReCLQ0X9ta7ElpTS4I8SBiFsdNHDMbYewuPIpBf</string>
+	<string>phc_xtJodazpCEt99Md5nZ53t4pLgXMGdvE4uccFuLTcwRLY</string>
 	<key>RevenueCatAPIKey</key>
 	<string>appl_prmQlhmWmtJdjyklqnPdmsbgTaN</string>
 	<key>EnableTesterUnlocks</key>

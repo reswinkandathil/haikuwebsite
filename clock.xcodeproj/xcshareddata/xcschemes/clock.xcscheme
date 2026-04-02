@@ -53,7 +53,7 @@
       <EnvironmentVariables>
          <EnvironmentVariable
             key = "POSTHOG_PROJECT_TOKEN"
-            value = "phc_3hRgReCLQ0X9ta7ElpTS4I8SBiFsdNHDMbYewuPIpBf"
+            value = "phc_xtJodazpCEt99Md5nZ53t4pLgXMGdvE4uccFuLTcwRLY"
             isEnabled = "YES">
          </EnvironmentVariable>
          <EnvironmentVariable

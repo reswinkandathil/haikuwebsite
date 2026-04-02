@@ -10,6 +10,8 @@ class NotificationManager {
             if let error = error {
                 print("Notification permission error: \(error)")
             }
+            let event = granted ? "notification_permission_granted" : "notification_permission_denied"
+            AnalyticsManager.shared.capture(event)
         }
     }
     

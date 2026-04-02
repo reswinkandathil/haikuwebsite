@@ -1,47 +1,58 @@
 <wizard-report>
 # PostHog post-wizard report
 
-The wizard has completed a deep integration of PostHog analytics into the Haiku iOS app (SwiftUI). Here is a summary of all changes made:
-
-- **`clock.xcodeproj/project.pbxproj`** — Added the PostHog iOS SDK (`posthog-ios` v3.48.0) as a Swift Package Manager dependency with three UUID objects: a `PBXBuildFile`, an `XCSwiftPackageProductDependency`, and an `XCRemoteSwiftPackageReference`.
-- **`clock.xcodeproj/xcshareddata/xcschemes/clock.xcscheme`** — Added `POSTHOG_PROJECT_TOKEN` and `POSTHOG_HOST` as Xcode scheme Run environment variables so the app can read them at runtime without hardcoding.
-- **`.env`** — Created with the PostHog credentials for reference.
-- **`clock/clockApp.swift`** — Added `import PostHog`, a `PostHogEnv` enum to read credentials from environment variables, and SDK initialization with `captureApplicationLifecycleEvents = true`.
-- **`clock/OnboardingView.swift`** — Added `onboarding_completed` and `onboarding_skipped` capture calls.
-- **`clock/AddTaskView.swift`** — Added `task_created` and `task_updated` capture calls with duration and metadata properties.
-- **`clock/ContentView.swift`** — Added `task_deleted` capture call on swipe-delete.
-- **`clock/HaikuProView.swift`** — Added `paywall_viewed` (on appear) and `purchase_initiated` (with package details) capture calls.
-- **`clock/StoreManager.swift`** — Added `purchase_completed` (when Pro entitlement becomes active) and `purchase_restored` capture calls.
-- **`clock/GoogleCalendarManager.swift`** — Added `google_calendar_connected` capture call when calendar scope is granted.
-- **`clock/TodoView.swift`** — Added `brain_dump_task_added` and `brain_dump_task_scheduled` capture calls.
+The wizard has completed a deep integration of PostHog analytics into the Haiku iOS app (SwiftUI). The PostHog iOS SDK is installed via Swift Package Manager, initialized at app launch with lifecycle event capture enabled, and 35 custom events span the full user journey — from onboarding through daily task management to Pro subscription conversion.
 
 ## Events instrumented
 
 | Event | Description | File |
 |---|---|---|
-| `onboarding_completed` | User taps 'Get Started' on the final onboarding step | `clock/OnboardingView.swift` |
-| `onboarding_skipped` | User taps 'Skip' to bypass onboarding | `clock/OnboardingView.swift` |
-| `task_created` | User adds a new task to the schedule | `clock/AddTaskView.swift` |
+| `app_session_started` | App launched and PostHog SDK initialized | `clock/clockApp.swift` |
+| `onboarding_completed` | User finishes onboarding with goal, task, and notification preference | `clock/OnboardingView.swift` |
+| `onboarding_skipped` | User skips onboarding from any page | `clock/OnboardingView.swift` |
+| `onboarding_notification_accepted` | User accepts notification reminders during onboarding | `clock/OnboardingView.swift` |
+| `onboarding_notification_skipped` | User skips notification prompts during onboarding | `clock/OnboardingView.swift` |
+| `task_created` | User schedules a new task on the clock | `clock/AddTaskView.swift` |
 | `task_updated` | User edits and saves an existing task | `clock/AddTaskView.swift` |
 | `task_deleted` | User swipe-deletes a task from the clock view | `clock/ContentView.swift` |
-| `paywall_viewed` | User views the Haiku Pro paywall/upgrade screen | `clock/HaikuProView.swift` |
-| `purchase_initiated` | User taps a pricing button to begin a Pro purchase | `clock/HaikuProView.swift` |
-| `purchase_completed` | User's Pro entitlement becomes active after a successful purchase | `clock/StoreManager.swift` |
-| `purchase_restored` | User restores previous Pro purchases | `clock/StoreManager.swift` |
-| `google_calendar_connected` | User successfully signs in with Google and grants calendar scope | `clock/GoogleCalendarManager.swift` |
+| `manual_color_selected` | User manually picks a task color | `clock/AddTaskView.swift` |
+| `category_deleted` | User deletes a task category via context menu | `clock/AddTaskView.swift` |
+| `tab_changed` | User switches tabs (Clock, Weekly, To-Do, Analytics, Profile) | `clock/ContentView.swift` |
+| `date_changed` | User navigates to a different date via chevron or swipe | `clock/ContentView.swift` |
 | `brain_dump_task_added` | User adds a quick task to the Brain Dump list | `clock/TodoView.swift` |
-| `brain_dump_task_scheduled` | User schedules a Brain Dump task to a specific date/time on the clock | `clock/TodoView.swift` |
+| `brain_dump_task_completed` | User marks a Brain Dump task as completed | `clock/TodoView.swift` |
+| `brain_dump_task_reactivated` | User unchecks a previously completed Brain Dump task | `clock/TodoView.swift` |
+| `brain_dump_task_deleted` | User swipe-deletes a Brain Dump task | `clock/TodoView.swift` |
+| `brain_dump_task_scheduled` | User schedules a Brain Dump task onto the clock | `clock/TodoView.swift` |
+| `brain_dump_selection_mode_toggled` | User toggles multi-select mode in Brain Dump | `clock/TodoView.swift` |
+| `brain_dump_list_cleared` | User clears completed Brain Dump tasks | `clock/TodoView.swift` |
+| `bulk_import_completed` | User bulk-imports tasks into Brain Dump via paste | `clock/BulkImportView.swift` |
+| `paywall_viewed` | User sees the Haiku Pro paywall | `clock/HaikuProView.swift` |
+| `paywall_dismissed` | User dismisses the paywall without purchasing | `clock/HaikuProView.swift` |
+| `purchase_initiated` | User taps the CTA to start a subscription purchase | `clock/HaikuProView.swift` |
+| `purchase_completed` | User's Pro entitlement becomes active | `clock/StoreManager.swift` |
+| `purchase_failed` | A purchase attempt threw an error | `clock/HaikuProView.swift` |
+| `purchase_restored` | User restores a previous Pro purchase | `clock/StoreManager.swift` |
+| `upgrade_banner_clicked` | Free user taps the Upgrade banner in Settings | `clock/ProfileSettingsView.swift` |
+| `pro_feature_denied` | Free user tries to access a Pro-only feature | `clock/ProfileSettingsView.swift` |
+| `upgrade_custom_notification_clicked` | Free user taps custom notifications (Pro feature) | `clock/ProfileSettingsView.swift` |
+| `upgrade_apple_calendar_clicked` | Free user taps Apple Calendar sync (Pro feature) | `clock/ProfileSettingsView.swift` |
+| `upgrade_google_signin_clicked` | Free user taps Google Calendar sync (Pro feature) | `clock/ProfileSettingsView.swift` |
+| `google_signout_clicked` | Pro user signs out of Google Calendar | `clock/ProfileSettingsView.swift` |
+| `theme_changed` | User switches the app visual theme | `clock/ProfileSettingsView.swift` |
+| `clock_format_toggled` | User toggles between 12-hour and 24-hour clock | `clock/ProfileSettingsView.swift` |
+| `testflight_free_unlock_clicked` | Reviewer/tester unlocks Pro for free in sandbox mode | `clock/HaikuProView.swift` |
 
 ## Next steps
 
-We've built some insights and a dashboard for you to keep an eye on user behavior, based on the events we just instrumented:
+We've built some insights and a dashboard for you to keep an eye on user behavior, based on the events instrumented:
 
-- **Dashboard — Analytics basics**: https://us.posthog.com/project/354135/dashboard/1391238
-- **Pro Purchase Conversion Funnel** (paywall → initiated → completed): https://us.posthog.com/project/354135/insights/wY7AZLEI
-- **Daily Task Activity** (created vs deleted): https://us.posthog.com/project/354135/insights/6WcupMEb
-- **Onboarding Completion vs Skip**: https://us.posthog.com/project/354135/insights/zB2NwJlF
-- **Weekly Task Creator Retention**: https://us.posthog.com/project/354135/insights/3J0c7NTP
-- **Brain Dump: Add vs Schedule Rate**: https://us.posthog.com/project/354135/insights/B304Pzg0
+- **Dashboard — Analytics basics**: https://us.posthog.com/project/366120/dashboard/1423010
+- **Onboarding Funnel** (app launch → onboarding completed): https://us.posthog.com/project/366120/insights/yRssndtN
+- **Pro Subscription Conversion Funnel** (paywall viewed → initiated → completed): https://us.posthog.com/project/366120/insights/xEv6JLho
+- **Daily Task Creation (DAU)** (unique users creating tasks per day): https://us.posthog.com/project/366120/insights/tlexV3RO
+- **Pro Upgrade Intent** (upgrade touches, paywall views, purchase initiations): https://us.posthog.com/project/366120/insights/IIAZdWbO
+- **Feature Engagement: Tasks & Brain Dump** (clock tasks vs brain dump adds/completions): https://us.posthog.com/project/366120/insights/deA2hbZp
 
 ### Agent skill
 

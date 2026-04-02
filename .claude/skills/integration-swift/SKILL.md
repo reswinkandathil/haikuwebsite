@@ -3,7 +3,7 @@ name: integration-swift
 description: PostHog integration for Swift iOS and macOS applications
 metadata:
   author: PostHog
-  version: 1.9.3
+  version: 1.9.4
 ---
 
 # PostHog integration for Swift (iOS/macOS)

@@ -19,8 +19,7 @@ struct ProfileSettingsView: View {
     private var bgColor: Color { currentTheme.bg }
     private var goldColor: Color { currentTheme.accent }
     private var appVersionText: String {
-        let shortVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
-        return "Version \(shortVersion)"
+        return "Version 1.1"
     }
 
     private var offsets: [Int] {

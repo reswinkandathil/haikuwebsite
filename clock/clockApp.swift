@@ -32,8 +32,11 @@ struct clockApp: App {
 
         if let projectToken = AppConfiguration.postHogProjectToken,
            let host = AppConfiguration.postHogHost {
+            print("PostHog: Initializing with token: \(projectToken) and host: \(host)")
             let config = PostHogConfig(apiKey: projectToken, host: host)
             config.captureApplicationLifecycleEvents = true
+            config.debug = true // Enable PostHog debug logging
+            config.personProfiles = .always
             PostHogSDK.shared.setup(config)
             AnalyticsManager.shared.capture("app_session_started")
         } else {
