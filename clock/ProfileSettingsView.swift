@@ -19,7 +19,7 @@ struct ProfileSettingsView: View {
     private var bgColor: Color { currentTheme.bg }
     private var goldColor: Color { currentTheme.accent }
     private var appVersionText: String {
-        return "Version 1.1"
+        return "Version 1.2"
     }
 
     private var offsets: [Int] {
