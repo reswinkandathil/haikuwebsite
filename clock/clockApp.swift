@@ -13,6 +13,7 @@ import PostHog
 
 @main
 struct clockApp: App {
+    @Environment(\.scenePhase) private var scenePhase
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @StateObject private var storeManager = StoreManager()
     @State private var showingPaywall = false
@@ -64,6 +65,13 @@ struct clockApp: App {
             }
             .onOpenURL { url in
                 GIDSignIn.sharedInstance.handle(url)
+            }
+            .onChange(of: scenePhase) { oldPhase, newPhase in
+                if newPhase == .active {
+                    Task {
+                        await storeManager.syncPurchases()
+                    }
+                }
             }
         }
     }

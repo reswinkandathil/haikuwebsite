@@ -159,7 +159,24 @@ class StoreManager: ObservableObject {
     }
     
     private func updateProStatus(_ info: CustomerInfo) {
-        var proActive = info.entitlements[proEntitlementID]?.isActive == true
+        var proActive = false
+        
+        // RevenueCat entitlement keys might have trailing spaces depending on how they were entered in the dashboard
+        for (key, entitlement) in info.entitlements.all {
+            if key.trimmingCharacters(in: .whitespaces) == proEntitlementID.trimmingCharacters(in: .whitespaces) {
+                if entitlement.isActive {
+                    proActive = true
+                    break
+                }
+            }
+        }
+        
+        // Fallback: Check if they own the lifetime product directly in case RevenueCat entitlement mapping is missing
+        let lifetimeProductID = "reswin.clock.pro.lifetimev2"
+        if info.nonSubscriptions.contains(where: { $0.productIdentifier == lifetimeProductID }) {
+            proActive = true
+        }
+        
         print("RevenueCat: Checking entitlement '\(proEntitlementID)'. Active: \(proActive)")
         
         // LEGACY TESTER GIFT: If they ever unlocked it during TestFlight, keep it forever.
@@ -178,6 +195,19 @@ class StoreManager: ObservableObject {
             SharedTaskManager.shared.save(isPro: proActive)
             if proActive {
                 AnalyticsManager.shared.capture("purchase_completed")
+            }
+        }
+    }
+    
+    func syncPurchases() async {
+        guard isRevenueCatConfigured else { return }
+        
+        do {
+            if let info = try? await Purchases.shared.customerInfo() {
+                self.updateProStatus(info)
+            }
+            if let syncedInfo = try? await Purchases.shared.syncPurchases() {
+                self.updateProStatus(syncedInfo)
             }
         }
     }
