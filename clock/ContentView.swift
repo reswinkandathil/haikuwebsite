@@ -67,9 +67,11 @@ struct ContentView: View {
     @State private var deletedExternalIds = Set<String>()
     @State private var clockFrame: CGRect = .zero
     @State private var taskListResetToken = UUID()
+    @State private var lastGoogleCalendarRefreshAt: Date? = nil
     @AppStorage(CalendarSyncProvider.storageKey) private var activeCalendarSyncProvider: CalendarSyncProvider = .none
     @AppStorage("is24HourClock") private var is24HourClock = true
     @AppStorage("notificationOffsetsData") private var notificationOffsetsData = ""
+    private let googleCalendarRefreshInterval: TimeInterval = 30
 
     private var notificationOffsets: [Int] {
         if notificationOffsetsData.isEmpty { return [] }
@@ -242,6 +244,8 @@ struct ContentView: View {
         } else {
             now = date
         }
+
+        pollGoogleCalendarIfNeeded(at: date)
     }
 
     private func handleOnAppear() {
@@ -252,10 +256,10 @@ struct ContentView: View {
                 hasSeenTutorial = true
             }
         }
-        syncCalendar(for: selectedDate)
         SharedTaskManager.shared.save(is24HourClock: is24HourClock)
         SharedTaskManager.shared.save(theme: currentTheme)
         NotificationManager.shared.scheduleEarlyNotifications(tasksByDate: tasksByDate, offsets: notificationOffsets)
+        refreshVisibleCalendar(force: true)
         Task {
             await syncTasksWithCloud()
         }
@@ -264,6 +268,9 @@ struct ContentView: View {
     private func handleSelectedTabChange(oldTab: Tab, newTab: Tab) {
         if oldTab == .clock || newTab == .clock {
             resetClockInteractionState()
+        }
+        if newTab == .clock || newTab == .weekly {
+            refreshVisibleCalendar(force: true)
         }
         AnalyticsManager.shared.capture("tab_changed", properties: ["target_tab": "\(newTab)"])
     }
@@ -278,9 +285,10 @@ struct ContentView: View {
 
         purgeTasksForInactiveCalendarProviders()
         resetClockInteractionState()
+        lastGoogleCalendarRefreshAt = nil
 
         if newProvider != .none {
-            syncCalendar(for: selectedDate)
+            refreshVisibleCalendar(force: true)
         }
     }
 
@@ -302,6 +310,7 @@ struct ContentView: View {
 
     private func handleScenePhaseChange(oldPhase: ScenePhase, newPhase: ScenePhase) {
         if newPhase == .active {
+            refreshVisibleCalendar(force: true)
             Task {
                 await syncTasksWithCloud()
             }
@@ -324,7 +333,7 @@ struct ContentView: View {
 
     private func handleGoogleSignInChange(oldVal: Bool, newVal: Bool) {
         if newVal && activeCalendarSyncProvider == .google {
-            syncCalendar(for: selectedDate)
+            refreshVisibleCalendar(force: true)
         } else if !newVal && activeCalendarSyncProvider == .google {
             activeCalendarSyncProvider = .none
         }
@@ -560,6 +569,45 @@ struct ContentView: View {
 
     private func syncCalendar(for date: Date) {
         syncCalendarRange(from: date, to: Calendar.current.date(byAdding: .day, value: 1, to: date) ?? date)
+    }
+
+    private func refreshVisibleCalendar(force: Bool) {
+        guard isPro else { return }
+        guard activeCalendarSyncProvider != .none else { return }
+
+        if selectedTab == .weekly {
+            let weekStart = startOfWeek(for: selectedDate)
+            let weekEnd = Calendar.current.date(byAdding: .day, value: 7, to: weekStart) ?? weekStart
+            syncCalendarRange(from: weekStart, to: weekEnd)
+        } else {
+            syncCalendar(for: selectedDate)
+        }
+
+        if activeCalendarSyncProvider == .google, force {
+            lastGoogleCalendarRefreshAt = Date()
+        }
+    }
+
+    private func pollGoogleCalendarIfNeeded(at date: Date) {
+        guard scenePhase == .active else { return }
+        guard isPro else { return }
+        guard activeCalendarSyncProvider == .google else { return }
+        guard googleCalendarManager.isSignedIn else { return }
+
+        if let lastRefresh = lastGoogleCalendarRefreshAt,
+           date.timeIntervalSince(lastRefresh) < googleCalendarRefreshInterval {
+            return
+        }
+
+        lastGoogleCalendarRefreshAt = date
+        refreshVisibleCalendar(force: false)
+    }
+
+    private func startOfWeek(for date: Date) -> Date {
+        let calendar = Calendar.current
+        let startOfDay = calendar.startOfDay(for: date)
+        let weekday = calendar.component(.weekday, from: startOfDay)
+        return calendar.date(byAdding: .day, value: 1 - weekday, to: startOfDay) ?? startOfDay
     }
 
     private func syncCalendarRange(from startDate: Date, to endDate: Date) {
