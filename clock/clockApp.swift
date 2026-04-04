@@ -31,8 +31,10 @@ struct clockApp: App {
             print("RevenueCat: Missing API key. Purchase flows are disabled for this build.")
         }
 
-        if let projectToken = AppConfiguration.postHogProjectToken,
-           let host = AppConfiguration.postHogHost {
+        if AppConfiguration.isTestingMode {
+            print("PostHog: Disabled in testing mode.")
+        } else if let projectToken = AppConfiguration.postHogProjectToken,
+                  let host = AppConfiguration.postHogHost {
             print("PostHog: Initializing with token: \(projectToken) and host: \(host)")
             let config = PostHogConfig(apiKey: projectToken, host: host)
             config.captureApplicationLifecycleEvents = true

@@ -14,6 +14,10 @@ class GoogleCalendarManager: ObservableObject {
     private let calendarEndpoint = "https://www.googleapis.com/calendar/v3/calendars/primary/events"
     private let calendarScope = "https://www.googleapis.com/auth/calendar.events"
     private let isSignInEnabled = AppConfiguration.isGoogleSignInEnabled
+
+    var hasPreviousSignIn: Bool {
+        isSignInEnabled && GIDSignIn.sharedInstance.hasPreviousSignIn()
+    }
     
     init() {
         checkStatus()
@@ -34,10 +38,11 @@ class GoogleCalendarManager: ObservableObject {
         }
     }
     
-    private func updateSignInStatus(user: GIDGoogleUser?) {
+    @discardableResult
+    private func updateSignInStatus(user: GIDGoogleUser?) -> Bool {
         guard let user = user else {
             self.isSignedIn = false
-            return
+            return false
         }
         
         // Check if the user has granted the calendar scope
@@ -54,13 +59,16 @@ class GoogleCalendarManager: ObservableObject {
         } else {
             print("Google Sign-In: User is signed in but missing calendar scope.")
         }
+
+        return hasScope
     }
-    
-    func signIn(presenting viewController: UIViewController) {
+
+    func signIn(presenting viewController: UIViewController, completion: ((Bool) -> Void)? = nil) {
         guard isSignInEnabled else {
             print("Google Sign-In: Disabled by app configuration.")
             DispatchQueue.main.async {
                 self.isSignedIn = false
+                completion?(false)
             }
             return
         }
@@ -77,35 +85,37 @@ class GoogleCalendarManager: ObservableObject {
                     if let error = error {
                         print("Google Add Scopes Error: \(error.localizedDescription)")
                         // If addScopes fails, try a fresh sign-in
-                        self.freshSignIn(presenting: viewController, scopes: scopes)
+                        self.freshSignIn(presenting: viewController, scopes: scopes, completion: completion)
                         return
                     }
-                    self.updateSignInStatus(user: result?.user)
+                    completion?(self.updateSignInStatus(user: result?.user))
                 }
             }
         } else {
-            freshSignIn(presenting: viewController, scopes: scopes)
+            freshSignIn(presenting: viewController, scopes: scopes, completion: completion)
         }
     }
-    
-    private func freshSignIn(presenting viewController: UIViewController, scopes: [String]) {
+
+    private func freshSignIn(presenting viewController: UIViewController, scopes: [String], completion: ((Bool) -> Void)? = nil) {
         GIDSignIn.sharedInstance.signIn(withPresenting: viewController, hint: nil, additionalScopes: scopes) { result, error in
             DispatchQueue.main.async {
                 if let error = error {
                     print("Google Sign-In Error: \(error.localizedDescription)")
                     self.isSignedIn = false
+                    completion?(false)
                     return
                 }
                 print("Google Sign-In Success.")
-                self.updateSignInStatus(user: result?.user)
+                completion?(self.updateSignInStatus(user: result?.user))
             }
         }
     }
-    
+
     func signOut() {
         GIDSignIn.sharedInstance.signOut()
         DispatchQueue.main.async {
             self.isSignedIn = false
+            self.eventsDidChange.toggle()
         }
     }
     

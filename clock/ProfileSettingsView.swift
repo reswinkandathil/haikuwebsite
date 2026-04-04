@@ -4,6 +4,7 @@ import EventKit
 struct ProfileSettingsView: View {
     @AppStorage("appTheme") private var currentTheme: AppTheme = .sage
     @AppStorage("notificationOffsetsData") private var notificationOffsetsData = ""
+    @AppStorage(CalendarSyncProvider.storageKey) private var activeCalendarSyncProvider: CalendarSyncProvider = .none
     @EnvironmentObject var storeManager: StoreManager
     private var isPro: Bool { storeManager.isPro }
     @ObservedObject var googleCalendarManager = GoogleCalendarManager.shared
@@ -18,8 +19,34 @@ struct ProfileSettingsView: View {
 
     private var bgColor: Color { currentTheme.bg }
     private var goldColor: Color { currentTheme.accent }
+    private var testingProBinding: Binding<Bool> {
+        Binding(
+            get: { storeManager.isTestingProEnabled },
+            set: { storeManager.setTestingProEnabled($0) }
+        )
+    }
     private var appVersionText: String {
         return "Version 1.2"
+    }
+
+    private var isAppleConnected: Bool {
+        activeCalendarSyncProvider == .apple
+    }
+
+    private var isGoogleConnected: Bool {
+        activeCalendarSyncProvider == .google && googleCalendarManager.isSignedIn
+    }
+
+    private var appleButtonBlockedByGoogle: Bool {
+        activeCalendarSyncProvider == .google
+    }
+
+    private var googleButtonBlockedByApple: Bool {
+        activeCalendarSyncProvider == .apple
+    }
+
+    private var isAppleAuthorized: Bool {
+        CalendarManager.hasCalendarAccess(status: appleCalendarStatus)
     }
 
     private var offsets: [Int] {
@@ -43,6 +70,48 @@ struct ProfileSettingsView: View {
             NotificationManager.shared.requestAuthorization()
         }
         notificationOffsetsData = current.sorted().map(String.init).joined(separator: ",")
+    }
+
+    private func refreshAppleCalendarStatus() {
+        appleCalendarStatus = CalendarManager.currentAuthorizationStatus()
+    }
+
+    private func toggleAppleCalendarConnection() {
+        if isAppleConnected {
+            activeCalendarSyncProvider = .none
+            AnalyticsManager.shared.capture("apple_calendar_disconnected")
+            return
+        }
+
+        guard !appleButtonBlockedByGoogle else { return }
+
+        calendarManager.requestAccess { granted in
+            refreshAppleCalendarStatus()
+
+            guard granted else { return }
+
+            activeCalendarSyncProvider = .apple
+            AnalyticsManager.shared.capture("apple_calendar_connected")
+        }
+    }
+
+    private func toggleGoogleCalendarConnection() {
+        if isGoogleConnected {
+            AnalyticsManager.shared.capture("google_signout_clicked")
+            googleCalendarManager.signOut()
+            activeCalendarSyncProvider = .none
+            return
+        }
+
+        guard !googleButtonBlockedByApple else { return }
+
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let rootVC = windowScene.windows.first?.rootViewController {
+            googleCalendarManager.signIn(presenting: rootVC) { didSignIn in
+                guard didSignIn else { return }
+                activeCalendarSyncProvider = .google
+            }
+        }
     }
 
     var body: some View {
@@ -221,9 +290,7 @@ struct ProfileSettingsView: View {
                             // Apple Calendar Block
                             Button(action: {
                                 if isPro {
-                                    calendarManager.requestAccess { granted in
-                                        appleCalendarStatus = EKEventStore.authorizationStatus(for: .event)
-                                    }
+                                    toggleAppleCalendarConnection()
                                 } else {
                                     AnalyticsManager.shared.capture("pro_feature_denied", properties: ["feature": "apple_calendar"])
                                     AnalyticsManager.shared.capture("upgrade_apple_calendar_clicked")
@@ -232,24 +299,26 @@ struct ProfileSettingsView: View {
                                 }
                             }) {
                                 HStack(spacing: 12) {
-                                    let isAuthorized: Bool = {
-                                        if #available(iOS 17.0, *) {
-                                            return appleCalendarStatus == .fullAccess
-                                        } else {
-                                            // Fallback for older iOS versions where .authorized is not deprecated
-                                            return appleCalendarStatus.rawValue == 3
-                                        }
-                                    }()
-                                    
                                     Image(systemName: isPro ? "apple.logo" : "lock.fill")
-                                        .foregroundStyle(goldColor)
-                                    Text(isAuthorized ? "Apple Calendar Connected" : "Sync with Apple Calendar")
+                                        .foregroundStyle(
+                                            !isPro ? goldColor :
+                                            (isAppleConnected ? Color.red : (appleButtonBlockedByGoogle ? currentTheme.textForeground.opacity(0.45) : goldColor))
+                                        )
+                                    Text(
+                                        isAppleConnected
+                                            ? "Disconnect Apple Calendar"
+                                            : (appleButtonBlockedByGoogle ? "Disconnect Google Calendar First" : "Connect Apple Calendar")
+                                    )
                                         .font(.system(size: 16, weight: .medium))
                                         .foregroundStyle(currentTheme.textForeground.opacity(0.9))
                                     Spacer()
-                                    if isAuthorized {
+                                    if isAppleConnected {
                                         Image(systemName: "checkmark.circle.fill")
                                             .foregroundStyle(Color.green)
+                                    } else if isAppleAuthorized {
+                                        Text("Ready")
+                                            .font(.system(size: 12, weight: .semibold))
+                                            .foregroundStyle(goldColor.opacity(0.8))
                                     }
                                 }
                                 .padding()
@@ -261,21 +330,14 @@ struct ProfileSettingsView: View {
                                 )
                             }
                             .buttonStyle(.plain)
+                            .disabled(appleButtonBlockedByGoogle)
 
                             // Google Calendar Block
                             Button(action: {
                                 if !isGoogleSignInEnabled {
                                     return
                                 } else if isPro {
-                                    if googleCalendarManager.isSignedIn {
-                                        AnalyticsManager.shared.capture("google_signout_clicked")
-                                        googleCalendarManager.signOut()
-                                    } else {
-                                        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                                           let rootVC = windowScene.windows.first?.rootViewController {
-                                            googleCalendarManager.signIn(presenting: rootVC)
-                                        }
-                                    }
+                                    toggleGoogleCalendarConnection()
                                 } else {
                                     AnalyticsManager.shared.capture("pro_feature_denied", properties: ["feature": "google_calendar"])
                                     AnalyticsManager.shared.capture("upgrade_google_signin_clicked")
@@ -285,20 +347,23 @@ struct ProfileSettingsView: View {
                             }) {
                                 HStack(spacing: 12) {
                                     Image(systemName: !isGoogleSignInEnabled ? "clock.badge.exclamationmark" : (isPro ? "g.circle.fill" : "lock.fill"))
-                                        .foregroundStyle(!isGoogleSignInEnabled ? currentTheme.textForeground.opacity(0.45) : (googleCalendarManager.isSignedIn ? Color.red : goldColor))
+                                        .foregroundStyle(
+                                            !isGoogleSignInEnabled ? currentTheme.textForeground.opacity(0.45) :
+                                            (!isPro ? goldColor : (isGoogleConnected ? Color.red : (googleButtonBlockedByApple ? currentTheme.textForeground.opacity(0.45) : goldColor)))
+                                        )
                                     Text(
                                         !isGoogleSignInEnabled
-                                            ? "Google Calendar Sync Coming Soon"
-                                            : (googleCalendarManager.isSignedIn ? "Sign Out of Google" : (isPro ? "Sign In with Google" : "Google Calendar Sync"))
+                                            ? "Google Calendar Unavailable"
+                                            : (isGoogleConnected ? "Disconnect Google Calendar" : (googleButtonBlockedByApple ? "Disconnect Apple Calendar First" : (isPro ? "Connect Google Calendar" : "Google Calendar Sync")))
                                     )
                                         .font(.system(size: 16, weight: .medium))
                                         .foregroundStyle(currentTheme.textForeground.opacity(0.9))
                                     Spacer()
                                     if !isGoogleSignInEnabled {
-                                        Text("Coming Soon")
+                                        Text("Unavailable")
                                             .font(.system(size: 12, weight: .semibold))
                                             .foregroundStyle(goldColor)
-                                    } else if googleCalendarManager.isSignedIn {
+                                    } else if isGoogleConnected {
                                         Image(systemName: "checkmark.circle.fill")
                                             .foregroundStyle(Color.green)
                                     }
@@ -312,9 +377,13 @@ struct ProfileSettingsView: View {
                                 )
                             }
                             .buttonStyle(.plain)
-                            .disabled(!isGoogleSignInEnabled)
+                            .disabled(!isGoogleSignInEnabled || googleButtonBlockedByApple)
 
-                            Text(isGoogleSignInEnabled ? "Connect Google or iCloud." : "Google sign-in will unlock once verification is approved.")
+                            Text(
+                                isGoogleSignInEnabled
+                                    ? "Only one calendar can be connected at a time. Disconnect the current calendar before switching providers."
+                                    : "Google sign-in is disabled in this build."
+                            )
                                 .font(.system(size: 11, weight: .regular))
                                 .foregroundStyle(currentTheme.textForeground.opacity(0.6))
                                 .multilineTextAlignment(.center)
@@ -322,6 +391,35 @@ struct ProfileSettingsView: View {
                         }
                         .opacity(isPro ? 1.0 : 0.6)
                     }
+
+                    if storeManager.allowsTesterUnlocks && AppConfiguration.isTestingMode {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("TESTING")
+                                .font(.system(size: 12, weight: .regular, design: .serif))
+                                .foregroundStyle(goldColor)
+                                .tracking(1)
+                                .padding(.horizontal, 4)
+
+                            Toggle("Testing Pro Access", isOn: testingProBinding)
+                                .font(.system(size: 16, weight: .medium, design: .serif))
+                                .foregroundStyle(currentTheme.textForeground.opacity(0.9))
+                                .padding()
+                                .tint(goldColor)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(currentTheme.fieldBg)
+                                        .shadow(color: currentTheme.shadowDark, radius: 5, x: 4, y: 4)
+                                        .shadow(color: currentTheme.shadowLight, radius: 5, x: -4, y: -4)
+                                )
+
+                            Text("This toggle is only available in sandbox/testing mode and won’t appear in normal builds.")
+                                .font(.system(size: 11, weight: .regular))
+                                .foregroundStyle(currentTheme.textForeground.opacity(0.6))
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 8)
+                        }
+                    }
+
                     // Legal Section
                     VStack(alignment: .leading, spacing: 12) {
                         Text("LEGAL")
@@ -369,11 +467,19 @@ struct ProfileSettingsView: View {
         .sheet(isPresented: $showingPaywall) {
             HaikuProView(focusFeature: paywallFocusFeature)
         }
+        .onAppear {
+            refreshAppleCalendarStatus()
+        }
         .onChange(of: currentTheme) { oldTheme, newTheme in
             AnalyticsManager.shared.capture("theme_changed", properties: ["theme_name": newTheme.name])
         }
         .onChange(of: is24HourClock) { oldVal, newVal in
             AnalyticsManager.shared.capture("clock_format_toggled", properties: ["is_24_hour": newVal])
+        }
+        .onChange(of: googleCalendarManager.isSignedIn) { oldValue, newValue in
+            if !newValue && activeCalendarSyncProvider == .google {
+                activeCalendarSyncProvider = .none
+            }
         }
     }
 }

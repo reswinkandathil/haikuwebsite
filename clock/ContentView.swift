@@ -66,6 +66,8 @@ struct ContentView: View {
     @State private var taskToEdit: ClockTask? = nil
     @State private var deletedExternalIds = Set<String>()
     @State private var clockFrame: CGRect = .zero
+    @State private var taskListResetToken = UUID()
+    @AppStorage(CalendarSyncProvider.storageKey) private var activeCalendarSyncProvider: CalendarSyncProvider = .none
     @AppStorage("is24HourClock") private var is24HourClock = true
     @AppStorage("notificationOffsetsData") private var notificationOffsetsData = ""
 
@@ -79,7 +81,69 @@ struct ContentView: View {
     @AppStorage("hasSeenTwelveHourTutorial") private var hasSeenTwelveHourTutorial = false
     @State private var showingTutorial = false
 
+    private var shouldBlurContent: Bool {
+        showingCustomOffsetAlert || showingTutorial
+    }
+
     var body: some View {
+        fullyConfiguredRootLayout
+    }
+
+    private var fullyConfiguredRootLayout: some View {
+        syncObservedRootLayout
+            .onChange(of: is24HourClock) { oldVal, newVal in
+                handleClockFormatChange(oldVal: oldVal, newVal: newVal)
+            }
+            .onChange(of: currentTheme) { oldVal, newVal in
+                SharedTaskManager.shared.save(theme: newVal)
+                WidgetCenter.shared.reloadAllTimelines()
+            }
+            .onChange(of: calendarManager.eventsDidChange) {
+                guard activeCalendarSyncProvider == .apple else { return }
+                syncCalendar(for: selectedDate)
+            }
+            .onChange(of: GoogleCalendarManager.shared.eventsDidChange) {
+                guard activeCalendarSyncProvider == .google else { return }
+                syncCalendar(for: selectedDate)
+            }
+            .onChange(of: googleCalendarManager.isSignedIn) { oldVal, newVal in
+                handleGoogleSignInChange(oldVal: oldVal, newVal: newVal)
+            }
+    }
+
+    private var syncObservedRootLayout: some View {
+        presentationConfiguredRootLayout
+            .onChange(of: selectedTab) { oldTab, newTab in
+                handleSelectedTabChange(oldTab: oldTab, newTab: newTab)
+            }
+            .onChange(of: selectedDate) { oldDate, newDate in
+                handleSelectedDateChange(oldDate: oldDate, newDate: newDate)
+            }
+            .onChange(of: activeCalendarSyncProvider) { oldProvider, newProvider in
+                handleCalendarSyncProviderChange(oldProvider: oldProvider, newProvider: newProvider)
+            }
+            .onChange(of: tasksByDate) { oldTasks, newTasks in
+                handleTasksChanged(oldTasks: oldTasks, newTasks: newTasks)
+            }
+            .onChange(of: scenePhase) { oldPhase, newPhase in
+                handleScenePhaseChange(oldPhase: oldPhase, newPhase: newPhase)
+            }
+            .onChange(of: notificationOffsetsData) {
+                NotificationManager.shared.scheduleEarlyNotifications(tasksByDate: tasksByDate, offsets: notificationOffsets)
+            }
+    }
+
+    private var presentationConfiguredRootLayout: some View {
+        rootLayout
+            .onReceive(timer, perform: handleTimerTick)
+            .sheet(isPresented: $showingAddTask, content: addTaskSheet)
+            .sheet(isPresented: $showingDatePicker) {
+                datePickerSheetContent
+            }
+            .onAppear(perform: handleOnAppear)
+    }
+
+    private var rootLayout: some View {
         ZStack {
             bgColor.ignoresSafeArea()
 
@@ -95,8 +159,8 @@ struct ContentView: View {
                 tabBarView()
             }
             .environmentObject(storeManager)
-            .blur(radius: showingCustomOffsetAlert || showingTutorial ? 4 : 0)
-            .disabled(showingCustomOffsetAlert || showingTutorial)
+            .blur(radius: shouldBlurContent ? 4 : 0)
+            .disabled(shouldBlurContent)
 
             if showingCustomOffsetAlert {
                 customNotificationAlertView()
@@ -107,140 +171,162 @@ struct ContentView: View {
                     .transition(.opacity)
             }
         }
-        .onReceive(timer) { date in
-            // Stop rapid re-renders in Canvas which cause GroupRecordingError
-            if ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1" {
-                let currentSecond = Calendar.current.component(.second, from: date)
-                let lastSecond = Calendar.current.component(.second, from: now)
-                if currentSecond != lastSecond {
-                    now = date
+    }
+
+    private func addTaskSheet() -> some View {
+        AddTaskView(
+            tasksByDate: $tasksByDate,
+            selectedDate: $selectedDate,
+            prefilledTitle: prefilledTaskTitle,
+            brainDumpTaskId: prefilledTaskId,
+            taskToEdit: taskToEdit
+        )
+    }
+
+    private var datePickerSheetContent: some View {
+        NavigationStack {
+            ZStack {
+                currentTheme.bg.ignoresSafeArea()
+
+                ScrollView {
+                    VStack {
+                        DatePicker("Select Date", selection: $selectedDate, displayedComponents: .date)
+                            .datePickerStyle(.graphical)
+                            .tint(currentTheme.accent)
+                            .colorMultiply(currentTheme == .sakura ? currentTheme.textForeground : .white)
+                            .padding(20)
+                            .background(
+                                RoundedRectangle(cornerRadius: 24)
+                                    .fill(currentTheme.fieldBg)
+                                    .shadow(color: currentTheme.shadowDark, radius: 10, x: 8, y: 8)
+                                    .shadow(color: currentTheme.shadowLight, radius: 10, x: -8, y: -8)
+                            )
+                            .padding(24)
+                            .padding(.top, 16)
+                    }
                 }
-            } else {
+            }
+            .navigationTitle("")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(currentTheme.bg, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(currentTheme == .sakura ? .light : .dark, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("Select Date")
+                        .font(.system(size: 18, weight: .medium, design: .serif))
+                        .foregroundStyle(currentTheme.textForeground)
+                        .tracking(1)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        showingDatePicker = false
+                    }
+                    .font(.system(size: 16, weight: .bold, design: .serif))
+                    .foregroundStyle(currentTheme.accent)
+                }
+            }
+        }
+        .presentationDetents([.height(520)])
+        .preferredColorScheme(.dark)
+    }
+
+    private func handleTimerTick(_ date: Date) {
+        // Stop rapid re-renders in Canvas which cause GroupRecordingError
+        if ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1" {
+            let currentSecond = Calendar.current.component(.second, from: date)
+            let lastSecond = Calendar.current.component(.second, from: now)
+            if currentSecond != lastSecond {
                 now = date
             }
+        } else {
+            now = date
+        }
+    }
 
+    private func handleOnAppear() {
+        migrateLegacyCalendarSyncProviderIfNeeded()
+        if hasCompletedOnboarding && !hasSeenTutorial {
+            withAnimation(.easeInOut(duration: 0.4)) {
+                showingTutorial = true
+                hasSeenTutorial = true
+            }
         }
-        .sheet(isPresented: $showingAddTask) {
-            AddTaskView(tasksByDate: $tasksByDate, selectedDate: $selectedDate, prefilledTitle: prefilledTaskTitle, brainDumpTaskId: prefilledTaskId, taskToEdit: taskToEdit)
+        syncCalendar(for: selectedDate)
+        SharedTaskManager.shared.save(is24HourClock: is24HourClock)
+        SharedTaskManager.shared.save(theme: currentTheme)
+        NotificationManager.shared.scheduleEarlyNotifications(tasksByDate: tasksByDate, offsets: notificationOffsets)
+        Task {
+            await syncTasksWithCloud()
         }
-        .sheet(isPresented: $showingDatePicker) {
-            NavigationStack {
-                ZStack {
-                    currentTheme.bg.ignoresSafeArea()
+    }
 
-                    ScrollView {
-                        VStack {
-                            DatePicker("Select Date", selection: $selectedDate, displayedComponents: .date)
-                                .datePickerStyle(.graphical)
-                                .tint(currentTheme.accent)
-                                .colorMultiply(currentTheme == .sakura ? currentTheme.textForeground : .white)
-                                .padding(20)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 24)
-                                        .fill(currentTheme.fieldBg)
-                                        .shadow(color: currentTheme.shadowDark, radius: 10, x: 8, y: 8)
-                                        .shadow(color: currentTheme.shadowLight, radius: 10, x: -8, y: -8)
-                                )
-                                .padding(24)
-                                .padding(.top, 16)
-                        }
-                    }
-                }
-                .navigationTitle("")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbarBackground(currentTheme.bg, for: .navigationBar)
-                .toolbarBackground(.visible, for: .navigationBar)
-                .toolbarColorScheme(currentTheme == .sakura ? .light : .dark, for: .navigationBar)
-                .toolbar {
-                    ToolbarItem(placement: .principal) {
-                        Text("Select Date")
-                            .font(.system(size: 18, weight: .medium, design: .serif))
-                            .foregroundStyle(currentTheme.textForeground)
-                            .tracking(1)
-                    }
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Done") {
-                            showingDatePicker = false
-                        }
-                        .font(.system(size: 16, weight: .bold, design: .serif))
-                        .foregroundStyle(currentTheme.accent)
-                    }
-                }
-            }
-            .presentationDetents([.height(520)])
-            .preferredColorScheme(.dark)
+    private func handleSelectedTabChange(oldTab: Tab, newTab: Tab) {
+        if oldTab == .clock || newTab == .clock {
+            resetClockInteractionState()
         }
-        .onAppear {
-            if hasCompletedOnboarding && !hasSeenTutorial {
-                withAnimation(.easeInOut(duration: 0.4)) {
-                    showingTutorial = true
-                    hasSeenTutorial = true
-                }
-            }
+        AnalyticsManager.shared.capture("tab_changed", properties: ["target_tab": "\(newTab)"])
+    }
+
+    private func handleSelectedDateChange(oldDate: Date, newDate: Date) {
+        resetClockInteractionState()
+        syncCalendar(for: newDate)
+    }
+
+    private func handleCalendarSyncProviderChange(oldProvider: CalendarSyncProvider, newProvider: CalendarSyncProvider) {
+        guard oldProvider != newProvider else { return }
+
+        purgeTasksForInactiveCalendarProviders()
+        resetClockInteractionState()
+
+        if newProvider != .none {
             syncCalendar(for: selectedDate)
-            SharedTaskManager.shared.save(is24HourClock: is24HourClock)
-            SharedTaskManager.shared.save(theme: currentTheme)
-            NotificationManager.shared.scheduleEarlyNotifications(tasksByDate: tasksByDate, offsets: notificationOffsets)
+        }
+    }
+
+    private func handleTasksChanged(oldTasks: [Date: [ClockTask]], newTasks: [Date: [ClockTask]]) {
+        let isCloudUpdate = isApplyingCloudSnapshot
+        saveDebounceTask?.cancel()
+        saveDebounceTask = Task {
+            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s debounce
+            if !Task.isCancelled {
+                guard !isCloudUpdate else { return }
+
+                let modifiedAt = SharedTaskManager.shared.save(tasksByDate: newTasks)
+                WidgetCenter.shared.reloadAllTimelines()
+                NotificationManager.shared.scheduleEarlyNotifications(tasksByDate: newTasks, offsets: notificationOffsets)
+                await TaskCloudSyncManager.shared.uploadLocalSnapshot(tasksByDate: newTasks, modifiedAt: modifiedAt)
+            }
+        }
+    }
+
+    private func handleScenePhaseChange(oldPhase: ScenePhase, newPhase: ScenePhase) {
+        if newPhase == .active {
             Task {
                 await syncTasksWithCloud()
             }
+        } else {
+            resetClockInteractionState()
         }
-        .onChange(of: selectedTab) { oldTab, newTab in
-            AnalyticsManager.shared.capture("tab_changed", properties: ["target_tab": "\(newTab)"])
-        }
-        .onChange(of: selectedDate) { oldDate, newDate in
-            liveClockTasks = nil
-            syncCalendar(for: newDate)
-        }
-        .onChange(of: tasksByDate) { oldTasks, newTasks in
-            let isCloudUpdate = isApplyingCloudSnapshot
-            saveDebounceTask?.cancel()
-            saveDebounceTask = Task {
-                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s debounce
-                if !Task.isCancelled {
-                    guard !isCloudUpdate else { return }
+    }
 
-                    let modifiedAt = SharedTaskManager.shared.save(tasksByDate: newTasks)
-                    WidgetCenter.shared.reloadAllTimelines()
-                    NotificationManager.shared.scheduleEarlyNotifications(tasksByDate: newTasks, offsets: notificationOffsets)
-                    await TaskCloudSyncManager.shared.uploadLocalSnapshot(tasksByDate: newTasks, modifiedAt: modifiedAt)
-                }
+    private func handleClockFormatChange(oldVal: Bool, newVal: Bool) {
+        SharedTaskManager.shared.save(is24HourClock: newVal)
+        WidgetCenter.shared.reloadAllTimelines()
+        // Show the 12-hour ring tutorial the first time user switches to 12h mode
+        if !newVal && !hasSeenTwelveHourTutorial {
+            withAnimation(.easeInOut(duration: 0.4)) {
+                hasSeenTwelveHourTutorial = true
+                showingTutorial = true
             }
         }
-        .onChange(of: scenePhase) { _, newPhase in
-            guard newPhase == .active else { return }
-            Task {
-                await syncTasksWithCloud()
-            }
-        }
-        .onChange(of: notificationOffsetsData) {
-            NotificationManager.shared.scheduleEarlyNotifications(tasksByDate: tasksByDate, offsets: notificationOffsets)
-        }
-        .onChange(of: is24HourClock) { oldVal, newVal in
-            SharedTaskManager.shared.save(is24HourClock: newVal)
-            WidgetCenter.shared.reloadAllTimelines()
-            // Show the 12-hour ring tutorial the first time user switches to 12h mode
-            if !newVal && !hasSeenTwelveHourTutorial {
-                withAnimation(.easeInOut(duration: 0.4)) {
-                    hasSeenTwelveHourTutorial = true
-                    showingTutorial = true
-                }
-            }
-        }
-        .onChange(of: currentTheme) { oldVal, newVal in
-            SharedTaskManager.shared.save(theme: newVal)
-            WidgetCenter.shared.reloadAllTimelines()
-        }
-        .onChange(of: calendarManager.eventsDidChange) {
+    }
+
+    private func handleGoogleSignInChange(oldVal: Bool, newVal: Bool) {
+        if newVal && activeCalendarSyncProvider == .google {
             syncCalendar(for: selectedDate)
-        }
-        .onChange(of: GoogleCalendarManager.shared.eventsDidChange) {
-            syncCalendar(for: selectedDate)
-        }
-        .onChange(of: googleCalendarManager.isSignedIn) { oldVal, newVal in
-            if newVal {
-                syncCalendar(for: selectedDate)
-            }
+        } else if !newVal && activeCalendarSyncProvider == .google {
+            activeCalendarSyncProvider = .none
         }
     }
 
@@ -477,36 +563,25 @@ struct ContentView: View {
     }
 
     private func syncCalendarRange(from startDate: Date, to endDate: Date) {
-        // 2-way calendar sync is a Pro feature
         guard isPro else { return }
 
-        var combinedFetched: [Date: [ClockTask]] = [:]
-        let dispatchGroup = DispatchGroup()
-
-        // 1. Fetch from Apple Calendar
-        dispatchGroup.enter()
-        calendarManager.requestAccess { granted in
-            if granted {
-                let appleEvents = self.calendarManager.fetchEvents(from: startDate, to: endDate, theme: self.currentTheme)
-                for (date, tasks) in appleEvents {
-                    combinedFetched[date, default: []].append(contentsOf: tasks)
+        switch activeCalendarSyncProvider {
+        case .none:
+            return
+        case .apple:
+            calendarManager.requestAccess { granted in
+                guard granted else {
+                    activeCalendarSyncProvider = .none
+                    return
                 }
-            }
-            dispatchGroup.leave()
-        }
 
-        // 2. Fetch from Google Calendar
-        dispatchGroup.enter()
-        GoogleCalendarManager.shared.fetchEvents(from: startDate, to: endDate, theme: currentTheme) { googleEvents in
-            for (date, tasks) in googleEvents {
-                combinedFetched[date, default: []].append(contentsOf: tasks)
+                let appleEvents = self.calendarManager.fetchEvents(from: startDate, to: endDate, theme: self.currentTheme)
+                self.processSyncedEventsRange(appleEvents, from: startDate, to: endDate)
             }
-            dispatchGroup.leave()
-        }
-
-        // 3. Process results when both are done
-        dispatchGroup.notify(queue: .main) {
-            self.processSyncedEventsRange(combinedFetched, from: startDate, to: endDate)
+        case .google:
+            GoogleCalendarManager.shared.fetchEvents(from: startDate, to: endDate, theme: currentTheme) { googleEvents in
+                self.processSyncedEventsRange(googleEvents, from: startDate, to: endDate)
+            }
         }
     }
 
@@ -560,15 +635,31 @@ struct ContentView: View {
             }
         }
 
-        // Update existing or add new
+        // Update existing tasks in place and collapse any duplicated local copies of the same fetched event.
         for fetchedTask in uniqueFetched {
-            if let index = current.firstIndex(where: { $0.externalEventId == fetchedTask.externalEventId }) {
-                if current[index].title != fetchedTask.title ||
-                   current[index].startMinutes != fetchedTask.startMinutes ||
-                   current[index].endMinutes != fetchedTask.endMinutes {
-                    current[index].title = fetchedTask.title
-                    current[index].startMinutes = fetchedTask.startMinutes
-                    current[index].endMinutes = fetchedTask.endMinutes
+            let matchingIndices = current.indices.filter { index in
+                isSyncedMatch(current[index], fetchedTask: fetchedTask)
+            }
+
+            if let preferredIndex = preferredSyncedMatchIndex(from: matchingIndices, in: current, fetchedTask: fetchedTask) {
+                if current[preferredIndex].title != fetchedTask.title ||
+                   current[preferredIndex].startMinutes != fetchedTask.startMinutes ||
+                   current[preferredIndex].endMinutes != fetchedTask.endMinutes {
+                    current[preferredIndex].title = fetchedTask.title
+                    current[preferredIndex].startMinutes = fetchedTask.startMinutes
+                    current[preferredIndex].endMinutes = fetchedTask.endMinutes
+                }
+
+                if current[preferredIndex].externalEventId != fetchedTask.externalEventId {
+                    current[preferredIndex].externalEventId = fetchedTask.externalEventId
+                }
+
+                if current[preferredIndex].url != fetchedTask.url {
+                    current[preferredIndex].url = fetchedTask.url
+                }
+
+                for duplicateIndex in matchingIndices.sorted(by: >) where duplicateIndex != preferredIndex {
+                    current.remove(at: duplicateIndex)
                 }
             } else {
                 current.append(fetchedTask)
@@ -592,6 +683,40 @@ struct ContentView: View {
         current.sort { $0.startMinutes < $1.startMinutes }
         self.tasksByDate[date] = current
     }
+
+    private func isSyncedMatch(_ currentTask: ClockTask, fetchedTask: ClockTask) -> Bool {
+        if currentTask.externalEventId == fetchedTask.externalEventId && fetchedTask.externalEventId != nil {
+            return true
+        }
+
+        let sameContent =
+            currentTask.title == fetchedTask.title &&
+            currentTask.startMinutes == fetchedTask.startMinutes &&
+            currentTask.endMinutes == fetchedTask.endMinutes
+
+        guard sameContent else { return false }
+
+        let currentProvider = currentTask.calendarSyncProvider
+        let fetchedProvider = fetchedTask.calendarSyncProvider
+        return currentProvider == fetchedProvider || currentProvider == .none
+    }
+
+    private func preferredSyncedMatchIndex(
+        from indices: [Int],
+        in tasks: [ClockTask],
+        fetchedTask: ClockTask
+    ) -> Int? {
+        if let exactIndex = indices.first(where: { tasks[$0].externalEventId == fetchedTask.externalEventId }) {
+            return exactIndex
+        }
+
+        if let providerIndex = indices.first(where: { tasks[$0].calendarSyncProvider == fetchedTask.calendarSyncProvider }) {
+            return providerIndex
+        }
+
+        return indices.first
+    }
+
     @ViewBuilder
     private func clockContentView() -> some View {
         VStack(spacing: 0) {
@@ -608,10 +733,13 @@ struct ContentView: View {
                 onTaskUpdated: { updatedTask in
                     if isPro {
                         let day = Calendar.current.startOfDay(for: selectedDate)
-                        if let extId = updatedTask.externalEventId, extId.hasPrefix("google_") {
+                        switch updatedTask.calendarSyncProvider {
+                        case .google:
                             GoogleCalendarManager.shared.updateTask(updatedTask, date: day)
-                        } else {
+                        case .apple:
                             calendarManager.updateTask(updatedTask, date: day)
+                        case .none:
+                            syncTaskToActiveCalendarProvider(updatedTask, on: day)
                         }
                     }
                 },
@@ -713,6 +841,7 @@ struct ContentView: View {
                             }
                         }
                     }
+                    .id(taskListResetToken)
                     .listStyle(.plain)
                     .scrollContentBackground(.hidden)
                 }
@@ -831,6 +960,68 @@ struct ContentView: View {
         let dayOfYear = Calendar.current.ordinality(of: .day, in: .year, for: date) ?? 1
         let index = dayOfYear % quotes.count
         return quotes[index]
+    }
+
+    private func migrateLegacyCalendarSyncProviderIfNeeded() {
+        guard UserDefaults.standard.object(forKey: CalendarSyncProvider.storageKey) == nil else { return }
+
+        if googleCalendarManager.hasPreviousSignIn {
+            activeCalendarSyncProvider = .google
+        } else if CalendarManager.hasCalendarAccess() {
+            activeCalendarSyncProvider = .apple
+        } else {
+            activeCalendarSyncProvider = .none
+        }
+
+        purgeTasksForInactiveCalendarProviders()
+    }
+
+    private func purgeTasksForInactiveCalendarProviders() {
+        var filteredTasksByDate: [Date: [ClockTask]] = [:]
+
+        for (date, tasks) in tasksByDate {
+            let filteredTasks = tasks.filter { task in
+                task.calendarSyncProvider == .none || task.calendarSyncProvider == activeCalendarSyncProvider
+            }
+
+            if !filteredTasks.isEmpty {
+                filteredTasksByDate[date] = filteredTasks
+            }
+        }
+
+        if filteredTasksByDate != tasksByDate {
+            tasksByDate = filteredTasksByDate
+        }
+    }
+
+    private func syncTaskToActiveCalendarProvider(_ task: ClockTask, on day: Date) {
+        switch activeCalendarSyncProvider {
+        case .none:
+            return
+        case .apple:
+            if let externalEventId = calendarManager.saveTask(task, date: day) {
+                attachExternalEventId(externalEventId, to: task.id, on: day)
+            }
+        case .google:
+            GoogleCalendarManager.shared.saveTask(task, date: day) { externalEventId in
+                guard let externalEventId else { return }
+
+                DispatchQueue.main.async {
+                    attachExternalEventId(externalEventId, to: task.id, on: day)
+                }
+            }
+        }
+    }
+
+    private func attachExternalEventId(_ externalEventId: String, to taskId: UUID, on day: Date) {
+        guard let taskIndex = tasksByDate[day]?.firstIndex(where: { $0.id == taskId }) else { return }
+        tasksByDate[day]?[taskIndex].externalEventId = externalEventId
+    }
+
+    private func resetClockInteractionState() {
+        liveClockTasks = nil
+        isFlowState = false
+        taskListResetToken = UUID()
     }
 
     @MainActor

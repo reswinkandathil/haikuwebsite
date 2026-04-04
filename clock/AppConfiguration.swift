@@ -16,10 +16,16 @@ enum AppConfiguration {
         plistKey: "RevenueCatAPIKey"
     )
 
-    static let allowsTesterUnlocks = configuredBool(
-        envKey: "ENABLE_TESTER_UNLOCKS",
-        plistKey: "EnableTesterUnlocks"
-    )
+    static var allowsTesterUnlocks: Bool {
+        #if DEBUG
+        return true
+        #else
+        return configuredBool(
+            envKey: "ENABLE_TESTER_UNLOCKS",
+            plistKey: "EnableTesterUnlocks"
+        )
+        #endif
+    }
 
     static let isGoogleSignInEnabled = configuredBool(
         envKey: "ENABLE_GOOGLE_SIGN_IN",
@@ -28,6 +34,22 @@ enum AppConfiguration {
 
     static var isPostHogConfigured: Bool {
         postHogProjectToken != nil && postHogHost != nil
+    }
+
+    static var isTestingMode: Bool {
+        #if DEBUG
+        return true
+        #else
+        if Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt" {
+            return true
+        }
+
+        return false
+        #endif
+    }
+
+    static var isPostHogEnabled: Bool {
+        isPostHogConfigured && !isTestingMode
     }
 
     static var isRevenueCatConfigured: Bool {

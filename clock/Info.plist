@@ -21,6 +21,8 @@
 	<string>phc_xtJodazpCEt99Md5nZ53t4pLgXMGdvE4uccFuLTcwRLY</string>
 	<key>RevenueCatAPIKey</key>
 	<string>appl_prmQlhmWmtJdjyklqnPdmsbgTaN</string>
+	<key>EnableGoogleSignIn</key>
+	<true/>
 	<key>EnableTesterUnlocks</key>
 	<false/></dict>
 </plist>

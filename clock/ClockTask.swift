@@ -10,6 +10,27 @@ import UIKit
 import WidgetKit
 import Foundation
 
+enum CalendarSyncProvider: String, CaseIterable, Identifiable, Codable {
+    case none
+    case apple
+    case google
+
+    static let storageKey = "activeCalendarSyncProvider"
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .none:
+            return "None"
+        case .apple:
+            return "Apple Calendar"
+        case .google:
+            return "Google Calendar"
+        }
+    }
+}
+
 /// A simple model representing a task/meeting on a clock.
 /// Times are in minutes from midnight (0...1440). For a 12-hour clock, values wrap every 720 minutes.
 struct ClockTask: Identifiable, Hashable, Codable {
@@ -98,6 +119,13 @@ struct ClockTask: Identifiable, Hashable, Codable {
         } else {
             self.color = Color.blue
         }
+    }
+}
+
+extension ClockTask {
+    var calendarSyncProvider: CalendarSyncProvider {
+        guard let externalEventId else { return .none }
+        return externalEventId.hasPrefix("google_") ? .google : .apple
     }
 }
 

@@ -10,7 +10,7 @@ class StoreManager: ObservableObject {
     @Published private(set) var lastError: Error?
     @Published private(set) var isPro: Bool = false
     @Published private(set) var customerInfo: CustomerInfo?
-    @Published private(set) var isSandboxMode: Bool = false
+    @Published private(set) var isSandboxMode: Bool = AppConfiguration.isTestingMode
     @Published private(set) var isRevenueCatConfigured: Bool = AppConfiguration.isRevenueCatConfigured
     @Published private(set) var allowsTesterUnlocks: Bool = AppConfiguration.allowsTesterUnlocks
     private var hasUnlockedFreePro: Bool = false
@@ -20,9 +20,11 @@ class StoreManager: ObservableObject {
     private var customerInfoTask: Task<Void, Never>?
 
     private var canUseTesterUnlocks: Bool {
-        // If explicitly allowed in Info.plist/Environment, we don't strictly require isSandboxMode
-        // to ensure App Store reviewers never get blocked.
-        return allowsTesterUnlocks
+        allowsTesterUnlocks && AppConfiguration.isTestingMode
+    }
+
+    var isTestingProEnabled: Bool {
+        canUseTesterUnlocks && hasUnlockedFreePro
     }
 
     var paywallOffering: Offering? {
@@ -53,12 +55,14 @@ class StoreManager: ObservableObject {
         // Then fetch fresh status from server
         Task {
             if let info = try? await Purchases.shared.customerInfo() {
-                self.updateProStatus(info)
+                self.customerInfo = info
+                self.refreshProStatus()
             }
             
             // Sync purchases to catch App Store promo code redemptions (e.g. lifetime)
             if let syncedInfo = try? await Purchases.shared.syncPurchases() {
-                self.updateProStatus(syncedInfo)
+                self.customerInfo = syncedInfo
+                self.refreshProStatus()
             }
         }
 
@@ -100,6 +104,7 @@ class StoreManager: ObservableObject {
         let finalDetected = detectedSandbox
         await MainActor.run {
             self.isSandboxMode = finalDetected
+            self.refreshProStatus()
         }
         
         if finalDetected {
@@ -115,6 +120,23 @@ class StoreManager: ObservableObject {
         self.isPro = true
         SharedTaskManager.shared.save(isPro: true)
         AnalyticsManager.shared.capture("purchase_completed", properties: ["method": "sandbox_free_unlock"])
+    }
+
+    func setTestingProEnabled(_ enabled: Bool) {
+        guard canUseTesterUnlocks else { return }
+
+        hasUnlockedFreePro = enabled
+        SharedTaskManager.shared.saveHasUnlockedFreePro(enabled)
+
+        if enabled {
+            print("StoreManager: Testing Pro enabled.")
+            isPro = true
+            SharedTaskManager.shared.save(isPro: true)
+            AnalyticsManager.shared.capture("purchase_completed", properties: ["method": "testing_toggle"])
+        } else {
+            print("StoreManager: Testing Pro disabled.")
+            refreshProStatus()
+        }
     }
     
     func refreshOfferings() {
@@ -153,14 +175,34 @@ class StoreManager: ObservableObject {
         customerInfoTask = Task {
             for await info in Purchases.shared.customerInfoStream {
                 self.customerInfo = info
-                self.updateProStatus(info)
+                self.refreshProStatus()
             }
         }
     }
-    
-    private func updateProStatus(_ info: CustomerInfo) {
+
+    private func refreshProStatus() {
+        let proActive = resolvedProStatus(from: customerInfo)
+
+        if proActive != self.isPro {
+            print("RevenueCat: Pro status changing from \(self.isPro) to \(proActive)")
+            self.isPro = proActive
+            SharedTaskManager.shared.save(isPro: proActive)
+            if proActive {
+                AnalyticsManager.shared.capture("purchase_completed")
+            }
+        }
+    }
+
+    private func resolvedProStatus(from info: CustomerInfo?) -> Bool {
         var proActive = false
-        
+
+        guard let info else {
+            if canUseTesterUnlocks && hasUnlockedFreePro {
+                return true
+            }
+            return false
+        }
+
         // RevenueCat entitlement keys might have trailing spaces depending on how they were entered in the dashboard
         for (key, entitlement) in info.entitlements.all {
             if key.trimmingCharacters(in: .whitespaces) == proEntitlementID.trimmingCharacters(in: .whitespaces) {
@@ -178,25 +220,12 @@ class StoreManager: ObservableObject {
         }
         
         print("RevenueCat: Checking entitlement '\(proEntitlementID)'. Active: \(proActive)")
-        
-        // LEGACY TESTER GIFT: If they ever unlocked it during TestFlight, keep it forever.
+
         if canUseTesterUnlocks && hasUnlockedFreePro {
             proActive = true
         }
-        
-        // Keep Pro active for TestFlight/Sandbox even if RevenueCat says otherwise (for initial unlock)
-        if canUseTesterUnlocks && hasUnlockedFreePro {
-            proActive = true
-        }
-        
-        if proActive != self.isPro {
-            print("RevenueCat: Pro status changing from \(self.isPro) to \(proActive)")
-            self.isPro = proActive
-            SharedTaskManager.shared.save(isPro: proActive)
-            if proActive {
-                AnalyticsManager.shared.capture("purchase_completed")
-            }
-        }
+
+        return proActive
     }
     
     func syncPurchases() async {
@@ -204,10 +233,12 @@ class StoreManager: ObservableObject {
         
         do {
             if let info = try? await Purchases.shared.customerInfo() {
-                self.updateProStatus(info)
+                self.customerInfo = info
+                self.refreshProStatus()
             }
             if let syncedInfo = try? await Purchases.shared.syncPurchases() {
-                self.updateProStatus(syncedInfo)
+                self.customerInfo = syncedInfo
+                self.refreshProStatus()
             }
         }
     }
@@ -218,7 +249,8 @@ class StoreManager: ObservableObject {
         }
 
         let result = try await Purchases.shared.purchase(package: package)
-        updateProStatus(result.customerInfo)
+        customerInfo = result.customerInfo
+        refreshProStatus()
     }
     
     func restore() async {
@@ -229,7 +261,8 @@ class StoreManager: ObservableObject {
 
         do {
             let info = try await Purchases.shared.restorePurchases()
-            updateProStatus(info)
+            customerInfo = info
+            refreshProStatus()
             AnalyticsManager.shared.capture("purchase_restored")
         } catch {
             print("RevenueCat: Restore failed: \(error)")

@@ -6,6 +6,18 @@ internal import Combine
 class CalendarManager: ObservableObject {
     @Published var eventsDidChange: Bool = false
 
+    static func currentAuthorizationStatus() -> EKAuthorizationStatus {
+        EKEventStore.authorizationStatus(for: .event)
+    }
+
+    static func hasCalendarAccess(status: EKAuthorizationStatus = CalendarManager.currentAuthorizationStatus()) -> Bool {
+        if #available(iOS 17.0, *) {
+            return status == .fullAccess
+        } else {
+            return status.rawValue == 3
+        }
+    }
+
     private lazy var eventStore: EKEventStore = {
         return EKEventStore()
     }()
@@ -102,7 +114,7 @@ class CalendarManager: ObservableObject {
                 endMinutes: eMin,
                 color: color,
                 url: meetingUrl,
-                externalEventId: event.eventIdentifier
+                externalEventId: event.calendarItemIdentifier
             )
             
             result[eventDate, default: []].append(task)
@@ -167,7 +179,7 @@ class CalendarManager: ObservableObject {
                 endMinutes: eMin,
                 color: color,
                 url: meetingUrl,
-                externalEventId: event.eventIdentifier
+                externalEventId: event.calendarItemIdentifier
             )
         }.sorted { $0.startMinutes < $1.startMinutes }
     }
@@ -187,7 +199,7 @@ class CalendarManager: ObservableObject {
         
         do {
             try eventStore.save(event, span: .thisEvent)
-            return event.eventIdentifier
+            return event.calendarItemIdentifier
         } catch {
             print("Error saving event to Calendar: \(error)")
             return nil
@@ -196,7 +208,7 @@ class CalendarManager: ObservableObject {
 
     func updateTask(_ task: ClockTask, date: Date) {
         guard let externalId = task.externalEventId,
-              let event = eventStore.event(withIdentifier: externalId) else { return }
+              let event = event(matching: externalId) else { return }
         
         event.title = task.title
         
@@ -216,12 +228,20 @@ class CalendarManager: ObservableObject {
     }
 
     func deleteTask(externalId: String) {
-        guard let event = eventStore.event(withIdentifier: externalId) else { return }
+        guard let event = event(matching: externalId) else { return }
         do {
             try eventStore.remove(event, span: .thisEvent)
         } catch {
             print("Error deleting event from Calendar: \(error)")
         }
+    }
+
+    private func event(matching identifier: String) -> EKEvent? {
+        if let event = eventStore.calendarItem(withIdentifier: identifier) as? EKEvent {
+            return event
+        }
+
+        return eventStore.event(withIdentifier: identifier)
     }
 
     private func dateFromMinutes(_ minutes: Int, on date: Date) -> Date {

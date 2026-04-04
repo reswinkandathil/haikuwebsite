@@ -2,6 +2,7 @@ import SwiftUI
 
 struct AddTaskView: View {
     @AppStorage("appTheme") private var currentTheme: AppTheme = .sage
+    @AppStorage(CalendarSyncProvider.storageKey) private var activeCalendarSyncProvider: CalendarSyncProvider = .none
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var storeManager: StoreManager
     @Binding var tasksByDate: [Date: [ClockTask]]
@@ -361,14 +362,15 @@ struct AddTaskView: View {
             
             // Sync update to Apple Calendar or Google Calendar if Pro
             if isPro {
-                if let extId = updatedTask.externalEventId {
-                    if extId.hasPrefix("google_") {
-                        GoogleCalendarManager.shared.updateTask(updatedTask, date: day)
-                    } else {
-                        calendarManager.updateTask(updatedTask, date: day)
+                switch updatedTask.calendarSyncProvider {
+                case .google:
+                    GoogleCalendarManager.shared.updateTask(updatedTask, date: day)
+                case .apple:
+                    calendarManager.updateTask(updatedTask, date: day)
+                case .none:
+                    if let extId = connectTaskToActiveCalendar(updatedTask, on: day) {
+                        updatedTask.externalEventId = extId
                     }
-                } else if let extId = calendarManager.saveTask(updatedTask, date: day) {
-                    updatedTask.externalEventId = extId
                 }
             }
             
@@ -399,7 +401,8 @@ struct AddTaskView: View {
             
             // Push to external calendars if Pro
             if isPro {
-                if googleCalendarManager.isSignedIn {
+                switch activeCalendarSyncProvider {
+                case .google:
                     googleCalendarManager.saveTask(newTask, date: day) { extId in
                         if let extId = extId {
                             DispatchQueue.main.async {
@@ -409,10 +412,12 @@ struct AddTaskView: View {
                             }
                         }
                     }
-                } else {
+                case .apple:
                     if let extId = calendarManager.saveTask(newTask, date: day) {
                         newTask.externalEventId = extId
                     }
+                case .none:
+                    break
                 }
             }
             
@@ -442,6 +447,26 @@ struct AddTaskView: View {
         }
         
         dismiss()
+    }
+
+    private func connectTaskToActiveCalendar(_ task: ClockTask, on day: Date) -> String? {
+        switch activeCalendarSyncProvider {
+        case .none:
+            return nil
+        case .apple:
+            return calendarManager.saveTask(task, date: day)
+        case .google:
+            googleCalendarManager.saveTask(task, date: day) { extId in
+                guard let extId else { return }
+
+                DispatchQueue.main.async {
+                    if let idx = tasksByDate[day]?.firstIndex(where: { $0.id == task.id }) {
+                        tasksByDate[day]?[idx].externalEventId = extId
+                    }
+                }
+            }
+            return nil
+        }
     }
 }
 

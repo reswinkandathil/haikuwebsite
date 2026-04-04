@@ -10,7 +10,7 @@ struct AnalyticsManager {
     
     func capture(_ event: String, properties: [String: Any]? = nil) {
         #if canImport(PostHog)
-        guard AppConfiguration.isPostHogConfigured else { return }
+        guard AppConfiguration.isPostHogEnabled else { return }
         PostHogSDK.shared.capture(event, properties: properties)
         #else
         print("[Analytics Stub] Event: \(event), Properties: \(String(describing: properties))")

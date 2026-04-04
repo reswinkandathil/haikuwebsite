@@ -116,7 +116,7 @@ struct HaikuProView: View {
                             .padding(.top, 24)
                             .opacity(appearanceAnimate ? 1 : 0)
                             .scaleEffect(appearanceAnimate ? 1 : 0.97)
-                    } else if storeManager.isSandboxMode && storeManager.paywallOffering == nil {
+                    } else if AppConfiguration.isTestingMode && storeManager.paywallOffering == nil {
                         sandboxView.padding(.top, 24)
                     } else if !storeManager.isRevenueCatConfigured {
                         unconfiguredView.padding(.top, 24)
@@ -298,10 +298,6 @@ struct HaikuProView: View {
     }
 
     private func buyPro(_ package: Package) {
-        if storeManager.allowsTesterUnlocks {
-            storeManager.unlockProForFree()
-            return
-        }
         AnalyticsManager.shared.capture("purchase_initiated", properties: [
             "package_identifier": package.identifier,
             "price": package.localizedPriceString,
@@ -325,21 +321,21 @@ struct HaikuProView: View {
             Image(systemName: "wrench.and.screwdriver.fill")
                 .font(.system(size: 24))
                 .foregroundStyle(currentTheme.accent)
-            Text("Reviewer / Sandbox Mode")
+            Text("Testing Mode")
                 .font(.system(size: 14, weight: .semibold, design: .serif))
                 .foregroundStyle(currentTheme.textForeground)
-            Text("Products are still being approved. Use the free unlock below to test Pro features.")
+            Text("Use the testing toggle below when you need to turn Haiku Pro on or off during sandbox testing.")
                 .font(.system(size: 11))
                 .foregroundStyle(currentTheme.textForeground.opacity(0.6))
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
             Button(action: {
                 AnalyticsManager.shared.capture("testflight_free_unlock_clicked")
-                storeManager.unlockProForFree()
+                storeManager.setTestingProEnabled(!storeManager.isTestingProEnabled)
             }) {
                 HStack(spacing: 8) {
-                    Image(systemName: "checkmark.seal.fill")
-                    Text("UNLOCK FOR FREE (REVIEWER)")
+                    Image(systemName: storeManager.isTestingProEnabled ? "xmark.seal.fill" : "checkmark.seal.fill")
+                    Text(storeManager.isTestingProEnabled ? "TURN TESTING PRO OFF" : "TURN TESTING PRO ON")
                 }
                 .font(.system(size: 13, weight: .bold, design: .serif))
                 .foregroundStyle(currentTheme.accent)
@@ -360,7 +356,7 @@ struct HaikuProView: View {
             Text(storeManager.allowsTesterUnlocks ? "Tester build detected." : "Purchases unavailable in this build.")
                 .font(.system(size: 13, weight: .semibold, design: .serif))
                 .foregroundStyle(currentTheme.textForeground)
-            Text(storeManager.allowsTesterUnlocks ? "Use the free tester unlock below to access Pro." : "Add a RevenueCat API key to enable subscriptions.")
+            Text(storeManager.allowsTesterUnlocks ? "Testing controls appear only in sandbox/testing mode." : "Add a RevenueCat API key to enable subscriptions.")
                 .font(.system(size: 11, weight: .regular, design: .serif))
                 .foregroundStyle(currentTheme.textForeground.opacity(0.6))
                 .multilineTextAlignment(.center)
